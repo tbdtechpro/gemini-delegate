@@ -1,0 +1,273 @@
+"""All Gemini logic for the four operations (CLAUDE.md §6).
+
+Each public function returns a plain dict; only the CLI knows about the JSON
+envelope and exit codes. Failures raise ``CoreError`` (carrying enough context
+— model, usage, raw text — for the CLI to still populate the envelope).
+"""
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Callable, Sequence
+
+from google import genai
+from google.genai import types
+
+from . import media
+from .config import Config
+from .session import Session
+
+_JSON_MIME = "application/json"
+
+
+class CoreError(Exception):
+    """A failure inside a core operation, with optional envelope context."""
+
+    def __init__(self, type: str, message: str, details: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.type = type
+        self.message = message
+        self.details = details or {}
+
+
+def make_client() -> genai.Client:
+    """One client, key read from the environment only (CLAUDE.md §3, §6)."""
+    key = os.environ.get("GEMINI_API_KEY")
+    if not key:
+        raise CoreError("missing_key", "GEMINI_API_KEY is not set in the environment")
+    return genai.Client(api_key=key)
+
+
+# --- public operations ----------------------------------------------------------
+
+
+def describe(
+    client: Any,
+    cfg: Config,
+    *,
+    images: Sequence[str],
+    prompt: str,
+    model: str | None = None,
+    want_json: bool = False,
+    schema: str | None = None,
+    session_path: str | None = None,
+) -> dict[str, Any]:
+    def build(force_upload: bool, cache: dict, warnings: list[str]) -> list[types.Part]:
+        parts = [
+            media.prepare_image_part(
+                client, img, inline_max_bytes=cfg.inline_max_bytes,
+                force_upload=force_upload, cache=cache, warnings=warnings,
+            )
+            for img in images
+        ]
+        parts.append(types.Part(text=prompt))
+        return parts
+
+    return _run_text_op(
+        client, cfg, op="describe", build_parts=build, model=model,
+        want_json=want_json, schema=schema, session_path=session_path,
+    )
+
+
+def video(
+    client: Any,
+    cfg: Config,
+    *,
+    src: str,
+    prompt: str,
+    model: str | None = None,
+    want_json: bool = False,
+    schema: str | None = None,
+    session_path: str | None = None,
+) -> dict[str, Any]:
+    def build(force_upload: bool, cache: dict, warnings: list[str]) -> list[types.Part]:
+        # Video always uploads (or passes a URL through); force_upload is moot,
+        # but the shared cache keeps multi-turn cheap.
+        return [
+            media.prepare_video_part(client, src, cache=cache, warnings=warnings),
+            types.Part(text=prompt),
+        ]
+
+    return _run_text_op(
+        client, cfg, op="video", build_parts=build, model=model,
+        want_json=want_json, schema=schema, session_path=session_path,
+    )
+
+
+def ask(
+    client: Any,
+    cfg: Config,
+    *,
+    prompt: str,
+    model: str | None = None,
+    want_json: bool = False,
+    schema: str | None = None,
+    session_path: str | None = None,
+) -> dict[str, Any]:
+    def build(force_upload: bool, cache: dict, warnings: list[str]) -> list[types.Part]:
+        return [types.Part(text=prompt)]
+
+    return _run_text_op(
+        client, cfg, op="ask", build_parts=build, model=model,
+        want_json=want_json, schema=schema, session_path=session_path,
+    )
+
+
+def image(
+    client: Any,
+    cfg: Config,
+    *,
+    prompt: str,
+    out: str,
+    refs: Sequence[str] = (),
+    model: str | None = None,
+    n: int = 1,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    model_id = cfg.resolve_model(model or cfg.default_role("image"))
+
+    parts: list[types.Part] = [types.Part(text=prompt)]
+    for ref in refs:
+        parts.append(
+            media.prepare_image_part(
+                client, ref, inline_max_bytes=cfg.inline_max_bytes,
+                force_upload=False, cache={}, warnings=warnings,
+            )
+        )
+
+    config = types.GenerateContentConfig(response_modalities=["IMAGE"])
+    if n and n > 1:
+        config.candidate_count = n
+
+    resp = client.models.generate_content(
+        model=model_id, contents=[types.Content(role="user", parts=parts)], config=config
+    )
+    files = _save_images(resp, out)
+    if not files:
+        raise CoreError("no_image", "model returned no image data", details={"model": model_id})
+
+    return {
+        "op": "image", "model": model_id, "text": getattr(resp, "text", None),
+        "json": None, "files": files, "session": None,
+        "usage": _usage(resp), "warnings": warnings,
+    }
+
+
+# --- shared text-op machinery ---------------------------------------------------
+
+
+def _run_text_op(
+    client: Any,
+    cfg: Config,
+    *,
+    op: str,
+    build_parts: Callable[[bool, dict, list[str]], list[types.Part]],
+    model: str | None,
+    want_json: bool,
+    schema: str | None,
+    session_path: str | None,
+) -> dict[str, Any]:
+    warnings: list[str] = []
+    role = model or cfg.default_role(op)
+    model_id = cfg.resolve_model(role)
+    config, want_json = _build_config(want_json, schema)
+
+    if session_path:
+        session: Session | None = Session.load_or_create(session_path, role)
+        new_parts = build_parts(True, session.uploads, warnings)
+        session.append_user([_dump(p) for p in new_parts])
+        contents = [types.Content.model_validate(c) for c in session.contents]
+    else:
+        session = None
+        new_parts = build_parts(False, {}, warnings)
+        contents = [types.Content(role="user", parts=new_parts)]
+
+    resp = client.models.generate_content(model=model_id, contents=contents, config=config)
+    text = resp.text
+    usage = _usage(resp)
+    json_obj = _parse_json(text, model_id, usage) if want_json else None
+
+    if session is not None:
+        session.append_model([_dump(p) for p in _response_parts(resp)])
+        session.save(session_path)
+
+    return {
+        "op": op, "model": model_id, "text": text, "json": json_obj,
+        "files": [], "session": str(Path(session_path).resolve()) if session_path else None,
+        "usage": usage, "warnings": warnings,
+    }
+
+
+def _build_config(
+    want_json: bool, schema: str | None
+) -> tuple[types.GenerateContentConfig | None, bool]:
+    if schema:
+        return (
+            types.GenerateContentConfig(
+                response_mime_type=_JSON_MIME, response_schema=_load_schema(schema)
+            ),
+            True,
+        )
+    if want_json:
+        return types.GenerateContentConfig(response_mime_type=_JSON_MIME), True
+    return None, False
+
+
+def _load_schema(path: str) -> dict[str, Any]:
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CoreError("bad_schema", f"could not read JSON schema {path}: {exc}") from exc
+
+
+def _parse_json(text: str | None, model_id: str, usage: dict[str, int]) -> Any:
+    try:
+        return json.loads(text)  # type: ignore[arg-type]
+    except (json.JSONDecodeError, TypeError) as exc:
+        # CLAUDE.md §5: never silently fall back to text on a JSON-parse failure.
+        raise CoreError(
+            "json_parse",
+            f"model output was not valid JSON: {exc}",
+            details={"model": model_id, "usage": usage, "text": text},
+        ) from exc
+
+
+def _dump(part: types.Part) -> dict[str, Any]:
+    return part.model_dump(mode="json", exclude_none=True)
+
+
+def _response_parts(resp: Any) -> list[types.Part]:
+    try:
+        parts = resp.candidates[0].content.parts
+        if parts:
+            return list(parts)
+    except (AttributeError, IndexError, TypeError):
+        pass
+    return [types.Part(text=getattr(resp, "text", "") or "")]
+
+
+def _save_images(resp: Any, out: str) -> list[str]:
+    out_path = Path(out)
+    image_parts = [
+        part
+        for cand in (getattr(resp, "candidates", None) or [])
+        for part in (getattr(cand.content, "parts", None) or [])
+        if getattr(part, "inline_data", None)
+    ]
+    files: list[str] = []
+    for i, part in enumerate(image_parts):
+        path = out_path if i == 0 else out_path.with_name(f"{out_path.stem}_{i + 1}{out_path.suffix}")
+        part.as_image().save(str(path))
+        files.append(str(path.resolve()))
+    return files
+
+
+def _usage(resp: Any) -> dict[str, int]:
+    um = getattr(resp, "usage_metadata", None)
+    if um is None:
+        return {"input_tokens": 0, "output_tokens": 0}
+    return {
+        "input_tokens": getattr(um, "prompt_token_count", 0) or 0,
+        "output_tokens": getattr(um, "candidates_token_count", 0) or 0,
+    }

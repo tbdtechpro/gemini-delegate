@@ -1,0 +1,33 @@
+# gemini-delegate — packaged default configuration.
+#
+# Model IDs are CONFIG, never code (CLAUDE.md §2.4). Update these when Google
+# moves models — verify against `client.models.list()` or Google's docs; they
+# churn fast (CLAUDE.md §12). Source code only ever references the logical roles
+# below, never a literal model string.
+
+[models]
+text      = "gemini-3.5-flash"            # plain text / follow-ups
+vision    = "gemini-3.5-flash"            # image + doc -> text
+video     = "gemini-3.5-flash"            # video -> text (samples ~1 fps)
+reason    = "gemini-3.1-pro-preview"      # hard structured extraction (premium, opt-in)
+image     = "gemini-3.1-flash-image"      # Nano Banana 2, cheap default
+image_pro = "gemini-3-pro-image-preview"  # Nano Banana Pro: ~$0.134/img, 4K (premium, opt-in)
+
+# Default logical role per subcommand (CLAUDE.md §4). --model overrides these,
+# accepting either another role or an explicit model ID as an escape hatch.
+[defaults]
+describe = "vision"
+video    = "video"
+image    = "image"
+ask      = "text"
+
+[media]
+# Single-shot images at or below this size go inline as base64. Larger images,
+# all video, and ANY media used in a --session go through the Files API by URI
+# instead (CLAUDE.md §6).
+inline_max_bytes = 4194304   # 4 MiB
+
+[paths]
+# Upload cache: sha256(file_bytes) -> { uri, mime, name, expires }, so the same
+# file is never uploaded twice. Sessions live wherever --session points.
+cache_dir = "~/.cache/gemini-delegate"

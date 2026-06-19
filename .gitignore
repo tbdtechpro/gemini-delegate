@@ -1,0 +1,36 @@
+# --- secrets: never commit ---
+.env
+.env.*
+*.key
+*.pem
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# --- virtualenvs ---
+.venv/
+venv/
+env/
+
+# --- test / tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- runtime artifacts produced by the tool ---
+# Generated images and session files default to project-local paths; ignore the
+# common scratch locations so they don't get committed by accident.
+*.session.json
+/.cache/
