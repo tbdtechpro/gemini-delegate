@@ -409,7 +409,7 @@ def test_image_transparent_keys_and_injects_directive(cfg, tmp_path):
     client = MagicMock()
     client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
     out = tmp_path / "logo.png"
-    result = core.image(client, cfg, prompt="a creature", out=str(out), transparent=True)
+    core.image(client, cfg, prompt="a creature", out=str(out), transparent=True)
     assert Image.open(out).mode == "RGBA"
     assert Image.open(out).getpixel((0, 0))[3] == 0  # bg keyed out
     # directive was appended to the prompt the backend received
