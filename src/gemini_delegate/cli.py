@@ -120,8 +120,14 @@ def ask(prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
 )
 @click.option("--n", default=1, type=int, help="How many images to generate.")
 @click.option("--model", default=None, help="Logical role or explicit model ID.")
+@click.option("--size", type=click.Choice(["512", "1K", "2K", "4K"]), default=None,
+              help="Image resolution (Interactions / Pro). Default: model default.")
+@click.option("--aspect-ratio", "aspect_ratio", default=None,
+              help="Aspect ratio, e.g. 1:1, 16:9, 4:3.")
+@click.option("--endpoint", type=click.Choice(["auto", "interactions", "generate_content"]),
+              default=None, help="Override the image endpoint (default from config).")
 @click.option("--debug", is_flag=True, help="Print a traceback to stderr on failure.")
-def image(prompt, prompt_file, out, refs, n, model, debug):
+def image(prompt, prompt_file, out, refs, n, model, size, aspect_ratio, endpoint, debug):
     """Text (+ optional refs) -> generated image file(s)."""
     if n < 1:
         raise click.UsageError("--n must be >= 1")
@@ -129,7 +135,8 @@ def image(prompt, prompt_file, out, refs, n, model, debug):
 
     def run(client):
         return core.image(
-            client, load_config(), prompt=prompt, out=out, refs=list(refs), model=model, n=n
+            client, load_config(), prompt=prompt, out=out, refs=list(refs), model=model, n=n,
+            size=size, aspect_ratio=aspect_ratio, endpoint=endpoint,
         )
 
     _emit("image", debug, run)

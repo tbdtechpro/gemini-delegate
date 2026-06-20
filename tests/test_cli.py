@@ -124,3 +124,30 @@ def test_prompt_and_prompt_file_are_mutually_exclusive(fake_gemini):
 def test_neither_prompt_nor_prompt_file_is_usage_error(fake_gemini):
     res = CliRunner().invoke(cli, ["ask"])
     assert res.exit_code == 2
+
+
+def _interaction_ok(payload=b"PNG"):
+    import base64
+    from types import SimpleNamespace
+    b64 = base64.b64encode(payload).decode()
+    return SimpleNamespace(output_image=None,
+                           steps=[SimpleNamespace(content=[SimpleNamespace(type="image", data=b64)])],
+                           usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+
+
+def test_image_size_aspect_endpoint_options(fake_gemini):
+    fake_gemini.interactions.create.return_value = _interaction_ok()
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli, ["image", "--prompt", "x", "--out", "o.png",
+                                  "--size", "4K", "--aspect-ratio", "16:9", "--endpoint", "interactions"])
+        assert res.exit_code == 0
+        kw = fake_gemini.interactions.create.call_args.kwargs
+        assert kw["response_format"]["image_size"] == "4K"
+        import os
+        assert os.path.isfile("o.png")
+
+
+def test_image_rejects_bad_size(fake_gemini):
+    res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--size", "8K"])
+    assert res.exit_code == 2  # not in choice 512/1K/2K/4K
