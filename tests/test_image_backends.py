@@ -155,6 +155,10 @@ def test_interactions_backend_builds_request_and_extracts_image():
     kw = client.interactions.create.call_args.kwargs
     assert kw["model"] == "gemini-3-pro-image"
     assert kw["input"][0] == {"type": "text", "text": "a dog"}
+    assert kw["response_format"]["type"] == "image"
+    # The Interactions API only supports image/jpeg for response_format.mime_type
+    # (image/png returns HTTP 400) — verified live 2026-06-20.
+    assert kw["response_format"]["mime_type"] == "image/jpeg"
     assert kw["response_format"]["image_size"] == "4K"
     assert kw["response_format"]["aspect_ratio"] == "1:1"
     assert kw["extra_headers"]["Api-Revision"] == "2026-05-20"

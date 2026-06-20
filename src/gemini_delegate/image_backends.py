@@ -134,7 +134,9 @@ class InteractionsImageBackend:
     name = "interactions"
 
     def generate(self, client: Any, req: ImageRequest) -> ImageResult:
-        response_format: dict[str, Any] = {"type": "image", "mime_type": "image/png"}
+        # The Interactions image API only accepts image/jpeg here; image/png
+        # returns HTTP 400 (verified live 2026-06-20).
+        response_format: dict[str, Any] = {"type": "image", "mime_type": "image/jpeg"}
         if req.size:
             response_format["image_size"] = req.size
         if req.aspect_ratio:
