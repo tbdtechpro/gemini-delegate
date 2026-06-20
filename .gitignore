@@ -34,3 +34,4 @@ htmlcov/
 # common scratch locations so they don't get committed by accident.
 *.session.json
 /.cache/
+.superpowers/

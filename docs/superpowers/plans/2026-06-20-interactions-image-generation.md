@@ -226,7 +226,6 @@ from typing import Any
 from google.genai import types
 
 from . import media
-from .config import Config  # noqa: F401  (type reference for callers)
 from .core import CoreError
 
 _API_REVISION = "2026-05-20"
