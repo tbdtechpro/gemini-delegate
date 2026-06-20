@@ -8,13 +8,17 @@ can adopt the same pattern later.
 """
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from google.genai import types
 
 from .core import CoreError
 from . import media
+
+_API_REVISION = "2026-05-20"
 
 
 @dataclass
@@ -102,3 +106,57 @@ class GenerateContentImageBackend:
             if getattr(part, "inline_data", None)
         ]
         return ImageResult(images=images, usage=_gc_usage(resp))
+
+
+def _extract_interaction_images(interaction: Any) -> list[bytes]:
+    out_img = getattr(interaction, "output_image", None)
+    if out_img is not None and getattr(out_img, "data", None):
+        return [base64.b64decode(out_img.data)]
+    images: list[bytes] = []
+    for step in getattr(interaction, "steps", None) or []:
+        for block in getattr(step, "content", None) or []:
+            if getattr(block, "type", None) == "image" and getattr(block, "data", None):
+                images.append(base64.b64decode(block.data))
+    return images
+
+
+def _interaction_usage(interaction: Any) -> dict[str, int]:
+    u = getattr(interaction, "usage", None)
+    if u is None:
+        return {"input_tokens": 0, "output_tokens": 0}
+    return {
+        "input_tokens": getattr(u, "input_tokens", 0) or 0,
+        "output_tokens": getattr(u, "output_tokens", 0) or 0,
+    }
+
+
+class InteractionsImageBackend:
+    name = "interactions"
+
+    def generate(self, client: Any, req: ImageRequest) -> ImageResult:
+        response_format: dict[str, Any] = {"type": "image", "mime_type": "image/png"}
+        if req.size:
+            response_format["image_size"] = req.size
+        if req.aspect_ratio:
+            response_format["aspect_ratio"] = req.aspect_ratio
+        blocks: list[dict[str, Any]] = [{"type": "text", "text": req.prompt}]
+        for ref in req.refs:
+            data = base64.b64encode(Path(ref).read_bytes()).decode()
+            blocks.append({
+                "type": "image", "data": data,
+                "mime_type": media.guess_mime(ref) or "image/png",
+            })
+        images: list[bytes] = []
+        usage = {"input_tokens": 0, "output_tokens": 0}
+        for _ in range(max(1, req.n)):
+            interaction = client.interactions.create(
+                model=req.model_id,
+                input=blocks,
+                response_format=response_format,
+                extra_headers={"Api-Revision": _API_REVISION},
+            )
+            images.extend(_extract_interaction_images(interaction))
+            u = _interaction_usage(interaction)
+            usage["input_tokens"] += u["input_tokens"]
+            usage["output_tokens"] += u["output_tokens"]
+        return ImageResult(images=images, usage=usage)

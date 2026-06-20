@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+import base64
 import io
 from unittest.mock import MagicMock
 
@@ -6,7 +7,7 @@ import pytest
 from PIL import Image
 
 from gemini_delegate.core import CoreError
-from gemini_delegate.image_backends import ImageRequest, ImageResult, run_image, GenerateContentImageBackend
+from gemini_delegate.image_backends import ImageRequest, ImageResult, run_image, GenerateContentImageBackend, InteractionsImageBackend
 
 
 class _StubBackend:
@@ -135,3 +136,41 @@ def test_generate_content_backend_adds_ref_images(tmp_path):
     # text part AND at least one ref image part.
     all_parts = [p for content in contents for p in content.parts]
     assert len(all_parts) > 1, "expected prompt part + at least one ref image part"
+
+
+def _interaction_with_steps(payload=b"PNGDATA"):
+    b64 = base64.b64encode(payload).decode()
+    block = SimpleNamespace(type="image", data=b64)
+    step = SimpleNamespace(content=[block])
+    return SimpleNamespace(output_image=None, steps=[step],
+                           usage=SimpleNamespace(input_tokens=3, output_tokens=9))
+
+
+def test_interactions_backend_builds_request_and_extracts_image():
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_with_steps(b"ABC")
+    req = ImageRequest(prompt="a dog", model_id="gemini-3-pro-image", size="4K", aspect_ratio="1:1")
+    result = InteractionsImageBackend().generate(client, req)
+    assert result.images == [b"ABC"]
+    kw = client.interactions.create.call_args.kwargs
+    assert kw["model"] == "gemini-3-pro-image"
+    assert kw["input"][0] == {"type": "text", "text": "a dog"}
+    assert kw["response_format"]["image_size"] == "4K"
+    assert kw["response_format"]["aspect_ratio"] == "1:1"
+    assert kw["extra_headers"]["Api-Revision"] == "2026-05-20"
+
+
+def test_interactions_backend_prefers_output_image_when_present():
+    client = MagicMock()
+    payload = base64.b64encode(b"XYZ").decode()
+    client.interactions.create.return_value = SimpleNamespace(
+        output_image=SimpleNamespace(data=payload), steps=[])
+    result = InteractionsImageBackend().generate(client, ImageRequest(prompt="x", model_id="m"))
+    assert result.images == [b"XYZ"]
+
+
+def test_interactions_backend_loops_for_n():
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_with_steps(b"A")
+    InteractionsImageBackend().generate(client, ImageRequest(prompt="x", model_id="m", n=3))
+    assert client.interactions.create.call_count == 3
