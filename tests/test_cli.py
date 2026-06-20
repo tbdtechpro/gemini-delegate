@@ -126,9 +126,15 @@ def test_neither_prompt_nor_prompt_file_is_usage_error(fake_gemini):
     assert res.exit_code == 2
 
 
-def _interaction_ok(payload=b"PNG"):
+def _interaction_ok(payload=None):
     import base64
+    import io as _io
+    from PIL import Image as _Image
     from types import SimpleNamespace
+    if payload is None:
+        buf = _io.BytesIO()
+        _Image.new("RGB", (8, 8), (0, 0, 200)).save(buf, format="JPEG")  # API returns JPEG
+        payload = buf.getvalue()
     b64 = base64.b64encode(payload).decode()
     return SimpleNamespace(output_image=None,
                            steps=[SimpleNamespace(content=[SimpleNamespace(type="image", data=b64)])],

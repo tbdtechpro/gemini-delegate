@@ -192,7 +192,7 @@ def image(
         raise
     except Exception as exc:
         raise CoreError("image_error", str(exc), details={"model": model_id}) from exc
-    files = _save_image_bytes(result.images, out)
+    files = _render_outputs(result.images, out)
     if not files:
         raise CoreError("no_image", "model returned no image data", details={"model": model_id})
     extras = ", ".join(x for x in (f"size={size}" if size else "", f"aspect={aspect_ratio}" if aspect_ratio else "") if x)
@@ -296,13 +296,19 @@ def _response_parts(resp: Any) -> list[types.Part]:
     return [types.Part(text=getattr(resp, "text", "") or "")]
 
 
-def _save_image_bytes(images: list[bytes], out: str) -> list[str]:
+def _render_outputs(images: list[bytes], out: str) -> list[str]:
+    """Decode API bytes and save each in the format implied by the out extension."""
+    from . import imaging
+
     out_path = Path(out)
     files: list[str] = []
     for i, data in enumerate(images):
         path = out_path if i == 0 else out_path.with_name(f"{out_path.stem}_{i + 1}{out_path.suffix}")
-        path.write_bytes(data)
-        files.append(str(path.resolve()))
+        try:
+            img = imaging.decode(data)
+            files.append(imaging.save_image(img, str(path)))
+        except imaging.ImagingError as exc:
+            raise CoreError("image_error", str(exc), details={}) from exc
     return files
 
 

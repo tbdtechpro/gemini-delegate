@@ -146,8 +146,14 @@ def _gc_image_response(n=1):
                            usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=7))
 
 
-def _interaction_response(payload=b"INTERACTIONPNG"):
+def _interaction_response(payload=None):
     import base64
+    import io as _io
+    from PIL import Image as _Image
+    if payload is None:
+        buf = _io.BytesIO()
+        _Image.new("RGB", (8, 8), (0, 0, 200)).save(buf, format="JPEG")  # API returns JPEG
+        payload = buf.getvalue()
     b64 = base64.b64encode(payload).decode()
     block = SimpleNamespace(type="image", data=b64)
     return SimpleNamespace(output_image=None, steps=[SimpleNamespace(content=[block])],
@@ -211,6 +217,16 @@ def test_image_no_data_raises(cfg, tmp_path):
     with pytest.raises(core.CoreError) as exc:
         core.image(client, cfg, prompt="x", out=str(tmp_path / "o.png"))
     assert exc.value.type == "no_image"
+
+
+def test_image_transcodes_jpeg_to_png_out(cfg, tmp_path):
+    from PIL import Image
+    out = tmp_path / "out.png"  # ask for PNG; the backend returns JPEG bytes
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response()  # JPEG payload
+    result = core.image(client, cfg, prompt="draw", out=str(out))
+    assert result["files"] == [str(out.resolve())]
+    assert Image.open(out).format == "PNG"  # real PNG, not JPEG-bytes-in-a-.png
 
 
 # --- sessions -----------------------------------------------------------------
