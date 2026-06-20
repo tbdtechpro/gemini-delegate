@@ -65,6 +65,10 @@ class Config:
     def cache_dir(self) -> Path:
         return Path(self._data["paths"]["cache_dir"]).expanduser()
 
+    @property
+    def image_endpoint(self) -> str:
+        return self._data.get("image", {}).get("endpoint", "auto")
+
 
 def load_config(explicit_path: str | None = None) -> Config:
     """Load config following the resolution order, then apply env overrides."""

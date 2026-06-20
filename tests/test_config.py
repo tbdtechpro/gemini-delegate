@@ -110,3 +110,20 @@ def test_env_var_override_beats_file(tmp_path, monkeypatch):
 def test_config_is_a_plain_object():
     cfg = load_config()
     assert isinstance(cfg, Config)
+
+
+def test_image_pro_resolves_to_current_id():
+    cfg = load_config()
+    assert cfg.resolve_model("image_pro") == "gemini-3-pro-image"
+
+
+def test_image_endpoint_defaults_to_auto():
+    cfg = load_config()
+    assert cfg.image_endpoint == "auto"
+
+
+def test_image_endpoint_override(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text('[image]\nendpoint = "interactions"\n')
+    cfg = load_config(explicit_path=str(p))
+    assert cfg.image_endpoint == "interactions"

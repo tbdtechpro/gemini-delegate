@@ -11,7 +11,7 @@ vision    = "gemini-3.5-flash"            # image + doc -> text
 video     = "gemini-3.5-flash"            # video -> text (samples ~1 fps)
 reason    = "gemini-3.1-pro-preview"      # hard structured extraction (premium, opt-in)
 image     = "gemini-3.1-flash-image"      # Nano Banana 2, cheap default
-image_pro = "gemini-3-pro-image-preview"  # Nano Banana Pro: ~$0.134/img, 4K (premium, opt-in)
+image_pro = "gemini-3-pro-image"          # Nano Banana Pro: ~$0.134/img, 4K (premium, opt-in)
 
 # Default logical role per subcommand (CLAUDE.md §4). --model overrides these,
 # accepting either another role or an explicit model ID as an escape hatch.
@@ -31,3 +31,8 @@ inline_max_bytes = 4194304   # 4 MiB
 # Upload cache: sha256(file_bytes) -> { uri, mime, name, expires }, so the same
 # file is never uploaded twice. Sessions live wherever --session points.
 cache_dir = "~/.cache/gemini-delegate"
+
+[image]
+# Image-generation endpoint: auto = try Interactions (Beta), fall back to
+# generateContent on failure. Override per call with --endpoint.
+endpoint = "auto"   # auto | interactions | generate_content
