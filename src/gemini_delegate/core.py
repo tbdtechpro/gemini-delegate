@@ -172,34 +172,34 @@ def image(
     refs: Sequence[str] = (),
     model: str | None = None,
     n: int = 1,
+    size: str | None = None,
+    aspect_ratio: str | None = None,
+    endpoint: str | None = None,
 ) -> dict[str, Any]:
-    warnings: list[str] = []
+    from . import image_backends as ib  # local import avoids a circular import at module load
+
     model_id = cfg.resolve_model(model or cfg.default_role("image"))
-
-    parts: list[types.Part] = [types.Part(text=prompt)]
-    for ref in refs:
-        parts.append(
-            media.prepare_image_part(
-                client, ref, inline_max_bytes=cfg.inline_max_bytes,
-                force_upload=False, cache={}, warnings=warnings,
-            )
-        )
-
-    config = types.GenerateContentConfig(response_modalities=["IMAGE"])
-    if n and n > 1:
-        config.candidate_count = n
-
-    resp = client.models.generate_content(
-        model=model_id, contents=[types.Content(role="user", parts=parts)], config=config
+    policy = endpoint or cfg.image_endpoint
+    req = ib.ImageRequest(
+        prompt=prompt, model_id=model_id, refs=list(refs), n=n, size=size, aspect_ratio=aspect_ratio
     )
-    files = _save_images(resp, out)
+    try:
+        result, used, warnings = ib.run_image(
+            client, req, policy=policy,
+            interactions=ib.InteractionsImageBackend(), generate=ib.GenerateContentImageBackend(),
+        )
+    except CoreError:
+        raise
+    except Exception as exc:
+        raise CoreError("image_error", str(exc), details={"model": model_id}) from exc
+    files = _save_image_bytes(result.images, out)
     if not files:
         raise CoreError("no_image", "model returned no image data", details={"model": model_id})
-
+    extras = ", ".join(x for x in (f"size={size}" if size else "", f"aspect={aspect_ratio}" if aspect_ratio else "") if x)
+    warnings.append(f"image endpoint: {used}" + (f" ({extras})" if extras else ""))
     return {
-        "op": "image", "model": model_id, "text": getattr(resp, "text", None),
-        "json": None, "files": files, "session": None,
-        "usage": _usage(resp), "warnings": warnings,
+        "op": "image", "model": model_id, "text": None, "json": None,
+        "files": files, "session": None, "usage": result.usage, "warnings": warnings,
     }
 
 
@@ -296,18 +296,12 @@ def _response_parts(resp: Any) -> list[types.Part]:
     return [types.Part(text=getattr(resp, "text", "") or "")]
 
 
-def _save_images(resp: Any, out: str) -> list[str]:
+def _save_image_bytes(images: list[bytes], out: str) -> list[str]:
     out_path = Path(out)
-    image_parts = [
-        part
-        for cand in (getattr(resp, "candidates", None) or [])
-        for part in (getattr(cand.content, "parts", None) or [])
-        if getattr(part, "inline_data", None)
-    ]
     files: list[str] = []
-    for i, part in enumerate(image_parts):
+    for i, data in enumerate(images):
         path = out_path if i == 0 else out_path.with_name(f"{out_path.stem}_{i + 1}{out_path.suffix}")
-        part.as_image().save(str(path))
+        path.write_bytes(data)
         files.append(str(path.resolve()))
     return files
 

@@ -133,59 +133,83 @@ def test_video_local_file_uploads(cfg, tmp_path):
 # --- image --------------------------------------------------------------------
 
 
-def _image_response(n_images):
-    def _save_factory(payload):
-        def _save(path):
-            with open(path, "wb") as fh:
-                fh.write(payload)
-        return _save
-
-    parts = []
-    for i in range(n_images):
+def _gc_image_response(n=1):
+    import io
+    from PIL import Image
+    cands = []
+    for i in range(n):
         buf = io.BytesIO()
         Image.new("RGB", (8, 8), (0, i * 10, 0)).save(buf, format="PNG")
-        payload = buf.getvalue()
-        part = SimpleNamespace(
-            inline_data=SimpleNamespace(data=payload),
-            as_image=lambda p=payload: SimpleNamespace(save=_save_factory(p)),
-        )
-        parts.append(part)
-    return SimpleNamespace(
-        text=None,
-        candidates=[SimpleNamespace(content=SimpleNamespace(parts=parts))],
-        usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=0),
-    )
+        part = SimpleNamespace(inline_data=SimpleNamespace(data=buf.getvalue()))
+        cands.append(SimpleNamespace(content=SimpleNamespace(parts=[part])))
+    return SimpleNamespace(candidates=cands,
+                           usage_metadata=SimpleNamespace(prompt_token_count=3, candidates_token_count=7))
 
 
-def test_image_writes_file(cfg, tmp_path):
+def _interaction_response(payload=b"INTERACTIONPNG"):
+    import base64
+    b64 = base64.b64encode(payload).decode()
+    block = SimpleNamespace(type="image", data=b64)
+    return SimpleNamespace(output_image=None, steps=[SimpleNamespace(content=[block])],
+                           usage=SimpleNamespace(input_tokens=2, output_tokens=5))
+
+
+def test_image_default_endpoint_uses_interactions(cfg, tmp_path):
     out = tmp_path / "out.png"
-    client = _client_returning(_image_response(1))
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response()
     result = core.image(client, cfg, prompt="draw a cat", out=str(out))
     assert result["op"] == "image"
-    assert result["model"] == cfg.resolve_model("image")
     assert result["files"] == [str(out.resolve())]
-    assert out.is_file() and out.stat().st_size > 0
-    config = client.models.generate_content.call_args.kwargs["config"]
-    assert "IMAGE" in [str(m).upper() for m in config.response_modalities]
+    assert out.is_file()
+    client.models.generate_content.assert_not_called()  # interactions handled it
+    assert any("interactions" in w for w in result["warnings"])
 
 
-def test_image_multiple_n_numbers_files(cfg, tmp_path):
+def test_image_endpoint_generate_content(cfg, tmp_path):
     out = tmp_path / "out.png"
-    client = _client_returning(_image_response(2))
-    result = core.image(client, cfg, prompt="draw", out=str(out), n=2)
-    assert len(result["files"]) == 2
-    assert (tmp_path / "out.png").is_file()
-    assert (tmp_path / "out_2.png").is_file()
+    client = MagicMock()
+    client.models.generate_content.return_value = _gc_image_response(1)
+    result = core.image(client, cfg, prompt="draw", out=str(out), endpoint="generate_content")
+    assert out.is_file()
+    client.interactions.create.assert_not_called()
+
+
+def test_image_auto_falls_back_to_generate_content(cfg, tmp_path):
+    out = tmp_path / "out.png"
+    client = MagicMock()
+    client.interactions.create.side_effect = RuntimeError("beta down")
+    client.models.generate_content.return_value = _gc_image_response(1)
+    result = core.image(client, cfg, prompt="draw", out=str(out))  # default policy = auto
+    assert out.is_file()
+    assert any("fell back" in w for w in result["warnings"])
+
+
+def test_image_interactions_only_failure_raises(cfg, tmp_path):
+    client = MagicMock()
+    client.interactions.create.side_effect = RuntimeError("boom")
+    with pytest.raises(core.CoreError):
+        core.image(client, cfg, prompt="x", out=str(tmp_path / "o.png"), endpoint="interactions")
+
+
+def test_image_size_and_aspect_passed_to_interactions(cfg, tmp_path):
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response()
+    core.image(client, cfg, prompt="x", out=str(tmp_path / "o.png"), size="4K", aspect_ratio="16:9", model="image_pro")
+    kw = client.interactions.create.call_args.kwargs
+    assert kw["model"] == cfg.resolve_model("image_pro")  # gemini-3-pro-image
+    assert kw["response_format"]["image_size"] == "4K"
 
 
 def test_image_no_data_raises(cfg, tmp_path):
-    empty = SimpleNamespace(
-        text=None, candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]))],
-        usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=0),
-    )
-    client = _client_returning(empty)
-    with pytest.raises(CoreError) as exc:
-        core.image(client, cfg, prompt="draw", out=str(tmp_path / "o.png"))
+    client = MagicMock()
+    client.interactions.create.return_value = SimpleNamespace(output_image=None, steps=[],
+                                                              usage=SimpleNamespace(input_tokens=0, output_tokens=0))
+    client.models.generate_content.return_value = SimpleNamespace(
+        candidates=[SimpleNamespace(content=SimpleNamespace(parts=[]))],
+        usage_metadata=SimpleNamespace(prompt_token_count=0, candidates_token_count=0))
+    with pytest.raises(core.CoreError) as exc:
+        core.image(client, cfg, prompt="x", out=str(tmp_path / "o.png"))
     assert exc.value.type == "no_image"
 
 
