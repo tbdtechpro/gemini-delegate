@@ -38,6 +38,19 @@ quick orientation for a session picking the project up.
 - Verify SDK field names against the installed `google-genai` before relying on
   them — they shift between versions (§5, §6).
 
+**Amendment (2026-06-20) — key resolution + ergonomics.** §2.3's "environment
+only" is relaxed: the CLI resolves `GEMINI_API_KEY` from the environment, then
+`$GEMINI_DELEGATE_ENV`, then `~/.config/gemini-delegate/.env`
+(`core.resolve_api_key`). The key is still never accepted on the command line,
+never logged, never written to a session file. This removes the ~25k-token
+"hunt for the .env" flailing every subagent did. Also added `--prompt-file PATH`
+(alternative to `--prompt`) so long/multi-line prompts stay out of the shell
+command line — keeps Bash calls single-line so they match a
+`Bash(gemini-delegate:*)` allowlist and don't trip newline-approval. The driving
+subagent (`agents/gemini-delegate.md`) now tells agents the key is auto-resolved
+(don't hunt for it), to run bare single-line commands, and to use `--prompt-file`
+for long prompts.
+
 **Known follow-ups** (tracked on the KeroAgile board): `--cleanup`/expiry has no
 live test; `ask`/`describe`/`video` lack a structured-output live check; no
 packaged JSON-schema validation of the `--schema` file itself; CI not wired.

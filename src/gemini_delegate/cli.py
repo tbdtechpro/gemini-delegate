@@ -22,7 +22,12 @@ from . import __version__
 
 # Options shared by the three text-producing, session-capable commands.
 def _text_options(func: Callable) -> Callable:
-    func = click.option("--prompt", required=True, help="The instruction to send.")(func)
+    func = click.option("--prompt", default=None, help="The instruction to send.")(func)
+    func = click.option(
+        "--prompt-file", "prompt_file", type=click.Path(exists=True, dir_okay=False),
+        help="Read the prompt from a file (use for long/multi-line prompts to avoid "
+             "shell quoting and approval friction).",
+    )(func)
     func = click.option("--json", "want_json", is_flag=True, help="Request JSON output.")(func)
     func = click.option(
         "--schema", type=click.Path(exists=True, dir_okay=False),
@@ -48,10 +53,11 @@ def cli() -> None:
 @cli.command()
 @click.argument("images", nargs=-1, type=click.Path(exists=True, dir_okay=False))
 @_text_options
-def describe(images, prompt, want_json, schema, session, model, cleanup, debug):
+def describe(images, prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
     """Image(s) -> text/JSON."""
     if not images:
         raise click.UsageError("describe requires at least one image path")
+    prompt = _resolve_prompt(prompt, prompt_file)
 
     def run(client):
         result = core.describe(
@@ -67,10 +73,11 @@ def describe(images, prompt, want_json, schema, session, model, cleanup, debug):
 @cli.command()
 @click.argument("src")
 @_text_options
-def video(src, prompt, want_json, schema, session, model, cleanup, debug):
+def video(src, prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
     """Video file or URL -> text/JSON."""
     if not media.is_url(src) and not Path(src).is_file():
         raise click.UsageError(f"video source not found: {src}")
+    prompt = _resolve_prompt(prompt, prompt_file)
 
     def run(client):
         result = core.video(
@@ -85,8 +92,9 @@ def video(src, prompt, want_json, schema, session, model, cleanup, debug):
 
 @cli.command()
 @_text_options
-def ask(prompt, want_json, schema, session, model, cleanup, debug):
+def ask(prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
     """Text prompt (+ session history) -> text/JSON."""
+    prompt = _resolve_prompt(prompt, prompt_file)
 
     def run(client):
         result = core.ask(
@@ -100,7 +108,11 @@ def ask(prompt, want_json, schema, session, model, cleanup, debug):
 
 
 @cli.command()
-@click.option("--prompt", required=True, help="The image description.")
+@click.option("--prompt", default=None, help="The image description.")
+@click.option(
+    "--prompt-file", "prompt_file", type=click.Path(exists=True, dir_okay=False),
+    help="Read the prompt from a file (for long/multi-line prompts).",
+)
 @click.option("--out", required=True, type=click.Path(dir_okay=False), help="Where to write the image.")
 @click.option(
     "--ref", "refs", multiple=True, type=click.Path(exists=True, dir_okay=False),
@@ -109,10 +121,11 @@ def ask(prompt, want_json, schema, session, model, cleanup, debug):
 @click.option("--n", default=1, type=int, help="How many images to generate.")
 @click.option("--model", default=None, help="Logical role or explicit model ID.")
 @click.option("--debug", is_flag=True, help="Print a traceback to stderr on failure.")
-def image(prompt, out, refs, n, model, debug):
+def image(prompt, prompt_file, out, refs, n, model, debug):
     """Text (+ optional refs) -> generated image file(s)."""
     if n < 1:
         raise click.UsageError("--n must be >= 1")
+    prompt = _resolve_prompt(prompt, prompt_file)
 
     def run(client):
         return core.image(
@@ -120,6 +133,20 @@ def image(prompt, out, refs, n, model, debug):
         )
 
     _emit("image", debug, run)
+
+
+# --- shared helpers -------------------------------------------------------------
+
+
+def _resolve_prompt(prompt: str | None, prompt_file: str | None) -> str:
+    """Resolve the prompt from --prompt or --prompt-file (exactly one required)."""
+    if prompt_file:
+        if prompt is not None:
+            raise click.UsageError("pass either --prompt or --prompt-file, not both")
+        return Path(prompt_file).read_text()
+    if prompt is None:
+        raise click.UsageError("one of --prompt or --prompt-file is required")
+    return prompt
 
 
 # --- envelope plumbing ----------------------------------------------------------

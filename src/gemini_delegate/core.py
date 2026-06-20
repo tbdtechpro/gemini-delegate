@@ -31,11 +31,60 @@ class CoreError(Exception):
         self.details = details or {}
 
 
-def make_client() -> genai.Client:
-    """One client, key read from the environment only (CLAUDE.md §3, §6)."""
+def _default_key_file() -> Path:
+    """User-scope key file used when GEMINI_API_KEY is not in the environment."""
+    return Path("~/.config/gemini-delegate/.env").expanduser()
+
+
+def _read_key_from_file(path: Path) -> str | None:
+    """Pull GEMINI_API_KEY from a dotenv-style file; never logged."""
+    try:
+        text = Path(path).read_text()
+    except OSError:
+        return None
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == "GEMINI_API_KEY":
+            value = value.strip().strip('"').strip("'")
+            if value:
+                return value
+    return None
+
+
+def resolve_api_key() -> str | None:
+    """Resolve the key: env var first, then $GEMINI_DELEGATE_ENV, then the
+    user key file (CLAUDE.md §3, amended to allow a user-controlled key file so
+    every session/subagent gets it with zero discovery). Never on the command
+    line, never logged."""
     key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        return key
+    candidates: list[Path] = []
+    env_file = os.environ.get("GEMINI_DELEGATE_ENV")
+    if env_file:
+        candidates.append(Path(env_file).expanduser())
+    candidates.append(_default_key_file())
+    for path in candidates:
+        key = _read_key_from_file(path)
+        if key:
+            return key
+    return None
+
+
+def make_client() -> genai.Client:
+    """One client; the key is resolved from env or a user key file (never logged)."""
+    key = resolve_api_key()
     if not key:
-        raise CoreError("missing_key", "GEMINI_API_KEY is not set in the environment")
+        raise CoreError(
+            "missing_key",
+            "GEMINI_API_KEY not found in the environment, $GEMINI_DELEGATE_ENV, "
+            "or ~/.config/gemini-delegate/.env",
+        )
     return genai.Client(api_key=key)
 
 

@@ -97,3 +97,30 @@ def test_debug_flag_does_not_corrupt_stdout(fake_gemini):
     assert env["ok"] is False
     assert env["error"]["type"] == "internal"
     assert "Traceback" in res.stderr  # ...and the traceback went to stderr
+
+
+def test_prompt_file_supplies_the_prompt(fake_gemini):
+    # --prompt-file lets long/multi-line prompts avoid shell quoting + approval friction.
+    fake_gemini.models.generate_content.return_value = text_response("ok")
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("p.txt", "w") as fh:
+            fh.write("a multi\nline prompt")
+        res = runner.invoke(cli, ["ask", "--prompt-file", "p.txt"])
+    assert res.exit_code == 0
+    sent = fake_gemini.models.generate_content.call_args.kwargs["contents"]
+    assert "multi" in sent[0].parts[0].text
+
+
+def test_prompt_and_prompt_file_are_mutually_exclusive(fake_gemini):
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        with open("p.txt", "w") as fh:
+            fh.write("x")
+        res = runner.invoke(cli, ["ask", "--prompt", "y", "--prompt-file", "p.txt"])
+    assert res.exit_code == 2
+
+
+def test_neither_prompt_nor_prompt_file_is_usage_error(fake_gemini):
+    res = CliRunner().invoke(cli, ["ask"])
+    assert res.exit_code == 2

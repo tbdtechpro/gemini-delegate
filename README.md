@@ -34,9 +34,17 @@ JSON envelope on stdout  ──►  subagent validates  ──►  clean result 
 ## Requirements
 
 - Python ≥ 3.11 (uses stdlib `tomllib`)
-- A `GEMINI_API_KEY` in the environment — read from the environment **only**,
-  never passed on the command line, never logged, never written to a session
-  file.
+- A `GEMINI_API_KEY`, resolved (in order) from: the environment, then
+  `$GEMINI_DELEGATE_ENV`, then `~/.config/gemini-delegate/.env`. It is never
+  passed on the command line, never logged, never written to a session file.
+  The key file means every session and subagent gets the key with zero
+  discovery:
+
+  ```sh
+  mkdir -p ~/.config/gemini-delegate
+  printf 'GEMINI_API_KEY=%s\n' "$YOUR_KEY" > ~/.config/gemini-delegate/.env
+  chmod 600 ~/.config/gemini-delegate/.env
+  ```
 
 ## Install
 
@@ -62,7 +70,8 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 
 | Option | Meaning |
 |---|---|
-| `--prompt TEXT` | The instruction (required everywhere). |
+| `--prompt TEXT` | The instruction (one of `--prompt`/`--prompt-file` required everywhere). |
+| `--prompt-file PATH` | Read the prompt from a file — use for long/multi-line prompts (cleaner shell, fewer approval prompts). |
 | `--json` | Request structured JSON (sets Gemini's JSON response mode). |
 | `--schema PATH` | A JSON Schema file; implies `--json`; enforced at the API boundary. |
 | `--session PATH` | Multi-turn: prior turns are read, the new turn sent, the response appended. |

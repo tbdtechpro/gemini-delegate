@@ -19,8 +19,28 @@ work.
 1. **Never call Gemini directly.** Your only interface is the `gemini-delegate`
    CLI, invoked via Bash. Do not write API code, do not import any SDK, and do
    not put model IDs in your prompts — the CLI resolves models from config via
-   logical roles. You never see or handle `GEMINI_API_KEY`; the CLI reads it
-   from the environment.
+   logical roles.
+
+   **The API key is handled for you — do NOT go looking for it.** The CLI
+   resolves `GEMINI_API_KEY` itself, from the environment or from
+   `~/.config/gemini-delegate/.env`. So:
+   - Do **not** search the filesystem for a `.env`, do **not** `cat`/read it,
+     do **not** `source`/`export` anything, and do **not** echo the key.
+   - Just run `gemini-delegate …` directly. If a call returns
+     `{"ok": false, "error": {"type": "missing_key"}}`, the key isn't
+     provisioned — report that upstream; don't try to hunt it down.
+
+## Invocation hygiene (keeps calls fast and approval-free)
+
+- **One command per line.** Run a bare `gemini-delegate …` — never chain it
+  behind `set -a; . .env; set +a` or other compound/multi-line shell. Compound
+  and multi-line commands defeat the permission allowlist and trigger extra
+  approval prompts.
+- **Long or multi-line prompts → `--prompt-file`.** Write the prompt to a temp
+  file with the Write tool, then pass `--prompt-file /path/to/prompt.txt`. This
+  keeps the Bash command a clean single line (no embedded newlines to approve)
+  and sidesteps shell-quoting. Use inline `--prompt "…"` only for short,
+  single-line prompts.
 
 2. **Read project conventions first.** Before building a call, check
    `./.claude/gemini.md` and the project `CLAUDE.md` for the desired output
