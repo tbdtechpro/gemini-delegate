@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import io
+from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
@@ -96,9 +97,6 @@ def _gc_response(n_images=1, prompt_tokens=4, cand_tokens=11):
 
 
 def test_generate_content_backend_returns_bytes_and_usage():
-    client = _StubBackend()
-    client.generate_content = lambda **kwargs: _gc_response(1)
-    from unittest.mock import MagicMock
     client = MagicMock()
     client.models.generate_content.return_value = _gc_response(1)
     req = ImageRequest(prompt="a cat", model_id="gemini-3.1-flash-image", size="4K", aspect_ratio="16:9")
@@ -112,7 +110,6 @@ def test_generate_content_backend_returns_bytes_and_usage():
 
 
 def test_generate_content_backend_candidate_count_for_n():
-    from unittest.mock import MagicMock
     client = MagicMock()
     client.models.generate_content.return_value = _gc_response(2)
     req = ImageRequest(prompt="x", model_id="m", n=2)
@@ -120,3 +117,21 @@ def test_generate_content_backend_candidate_count_for_n():
     assert len(result.images) == 2
     cfg = client.models.generate_content.call_args.kwargs["config"]
     assert cfg.candidate_count == 2
+
+
+def test_generate_content_backend_adds_ref_images(tmp_path):
+    # Write a small PNG to disk — small enough to go inline (no upload).
+    ref_png = tmp_path / "ref.png"
+    ref_png.write_bytes(_png_bytes((50, 100, 150)))
+
+    client = MagicMock()
+    client.models.generate_content.return_value = _gc_response(1)
+    req = ImageRequest(prompt="x", model_id="m", refs=[str(ref_png)])
+    GenerateContentImageBackend().generate(client, req)
+
+    call_kwargs = client.models.generate_content.call_args.kwargs
+    contents = call_kwargs["contents"]
+    # contents is a list with one Content; its parts should include the prompt
+    # text part AND at least one ref image part.
+    all_parts = [p for content in contents for p in content.parts]
+    assert len(all_parts) > 1, "expected prompt part + at least one ref image part"

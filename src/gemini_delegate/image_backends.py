@@ -82,11 +82,12 @@ class GenerateContentImageBackend:
         if req.n and req.n > 1:
             config.candidate_count = req.n
         parts: list[types.Part] = [types.Part(text=req.prompt)]
+        cache: dict = {}
         for ref in req.refs:
             parts.append(
                 media.prepare_image_part(
                     client, ref, inline_max_bytes=4 * 1024 * 1024,
-                    force_upload=False, cache={},
+                    force_upload=False, cache=cache,
                 )
             )
         resp = client.models.generate_content(
