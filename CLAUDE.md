@@ -55,6 +55,11 @@ for long prompts.
 live test; `ask`/`describe`/`video` lack a structured-output live check; no
 packaged JSON-schema validation of the `--schema` file itself; CI not wired.
 
+**Amendment (2026-06-20) — Interactions image path.** The `image` op now routes
+through the `interactions` surface by default (Beta); `generate_content` remains
+the automatic fallback. Config: `[image].endpoint = auto|interactions|generate_content`.
+See §2.2 amendment and `docs/superpowers/specs/2026-06-20-interactions-image-generation-design.md`.
+
 ---
 
 ## 1. What we're building
@@ -98,6 +103,10 @@ JSON envelope on stdout  ──►  subagent validates  ──►  clean result 
    legacy `google-generativeai` package.
 2. **API path:** build on `client.models.generate_content(...)`. Do **not** use
    the newer `interactions` surface — stability over novelty for a tool.
+   *Amended 2026-06-20: the `interactions` surface is now the **primary** path
+   for the `image` op (Beta), with `generate_content` as automatic fallback
+   (config key `[image].endpoint = auto|interactions|generate_content`). See
+   `docs/superpowers/specs/2026-06-20-interactions-image-generation-design.md`.*
 3. **API key:** read `GEMINI_API_KEY` from the environment only. Never accept it
    on the command line, never log it, never echo it, never write it to a session
    file.
@@ -400,9 +409,12 @@ tier. Video can also be supplied as a YouTube URL (free-tier daily limits apply)
 
 - An MCP server. The core lib is structured so a shim is easy later; building it
   now is wasted effort.
-- Imagen / Veo, batch processing, the `interactions` API.
+- Imagen / Veo, batch processing, ~~the `interactions` API~~ *(amended
+  2026-06-20: `interactions` is now the primary endpoint for the `image` op —
+  see §2.2 amendment and
+  `docs/superpowers/specs/2026-06-20-interactions-image-generation-design.md`)*.
 
-If a task seems to need one of these, stop and ask rather than expanding scope.
+If a task seems to need one of the remaining items above, stop and ask rather than expanding scope.
 
 ---
 

@@ -126,6 +126,28 @@ def main() -> int:
             print("        NOTE: envelope ok but no non-empty file at --out; "
                   "image config (e.g. response_modalities) may need adjustment.")
 
+        # --- image (Pro / 4K / Interactions): opt-in, gated behind SMOKE_PRO=1 ---
+        if os.environ.get("SMOKE_PRO") == "1":
+            out_pro = tmpdir / "generated_pro.png"
+            code, env, out, err = _call(
+                binary,
+                ["image", "--model", "image_pro", "--endpoint", "interactions",
+                 "--size", "4K", "--aspect-ratio", "16:9",
+                 "--prompt", "A single red maple leaf on white, studio lighting",
+                 "--out", str(out_pro)],
+            )
+            results.append(_report("image:pro/interactions/4K", code, env, out, err,
+                                   extra_ok=out_pro.is_file() and out_pro.stat().st_size > 0))
+            # force the generateContent fallback path
+            out_fb = tmpdir / "generated_fallback.png"
+            code, env, out, err = _call(
+                binary,
+                ["image", "--model", "image_pro", "--endpoint", "generate_content",
+                 "--prompt", "A single blue maple leaf on white", "--out", str(out_fb)],
+            )
+            results.append(_report("image:pro/generate_content", code, env, out, err,
+                                   extra_ok=out_fb.is_file() and out_fb.stat().st_size > 0))
+
         # --- video: YouTube URL pass-through (skippable) ---
         video_url = os.environ.get("SMOKE_VIDEO_URL", DEFAULT_VIDEO_URL)
         if video_url.lower() == "skip":

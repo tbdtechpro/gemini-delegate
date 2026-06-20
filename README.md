@@ -76,8 +76,37 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 | `--schema PATH` | A JSON Schema file; implies `--json`; enforced at the API boundary. |
 | `--session PATH` | Multi-turn: prior turns are read, the new turn sent, the response appended. |
 | `--model ROLE\|ID` | A logical role (`text`, `vision`, `video`, `image`, `image_pro`, `reason`) or an explicit model ID. |
+| `--size SIZE` | (`image` only) Output resolution: `1:1`, `4K`, `1024x1024`, etc. Passed through to the backend. |
+| `--aspect-ratio RATIO` | (`image` only) Aspect ratio hint: `1:1`, `16:9`, `4:3`, etc. |
+| `--endpoint VALUE` | (`image` only) Force the generation backend: `auto` (default), `interactions`, or `generate_content`. See below. |
 | `--cleanup` | (session commands) Delete this session's uploaded Files API objects. |
 | `--debug` | Print a traceback to **stderr** on failure (stdout stays clean JSON). |
+
+### Image endpoint (Interactions vs generateContent)
+
+The `image` subcommand supports two generation backends, selectable via
+`--endpoint` on the CLI or `[image].endpoint` in the config:
+
+| Value | Behaviour |
+|---|---|
+| `auto` *(default)* | Try the `interactions` surface first; fall back to `generate_content` automatically if it fails. |
+| `interactions` | Force the Interactions API (Beta). Best quality and 4K support; no free tier for `image_pro`. |
+| `generate_content` | Force the classic `generate_content` path. |
+
+The `interactions` path is the primary route as of 2026-06-20. Both paths
+produce the same JSON envelope; a `warnings` entry is added when an automatic
+fallback occurs so you know which backend was actually used.
+
+```sh
+# Pro model, 4K output, forced Interactions path
+gemini-delegate image --model image_pro --endpoint interactions \
+  --size 4K --aspect-ratio 16:9 \
+  --prompt "A red maple leaf on white, studio lighting" --out leaf.png
+
+# Explicit fallback for debugging
+gemini-delegate image --endpoint generate_content \
+  --prompt "A blue circle" --out circle.png
+```
 
 ## The output envelope
 
