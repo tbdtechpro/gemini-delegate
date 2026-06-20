@@ -397,7 +397,7 @@ vision    = "gemini-3.5-flash"            # image + doc -> text
 video     = "gemini-3.5-flash"            # video -> text (samples ~1 fps)
 reason    = "gemini-3.1-pro-preview"      # hard structured extraction
 image     = "gemini-3.1-flash-image"      # Nano Banana 2, cheap default
-image_pro = "gemini-3-pro-image-preview"  # Nano Banana Pro: ~$0.134/img, 4K, best text; opt-in
+image_pro = "gemini-3-pro-image"          # Nano Banana Pro: ~$0.134/img, 4K, best text; opt-in
 ```
 
 Notes: generated images carry a SynthID watermark. Nano Banana Pro has no free

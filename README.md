@@ -76,7 +76,7 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 | `--schema PATH` | A JSON Schema file; implies `--json`; enforced at the API boundary. |
 | `--session PATH` | Multi-turn: prior turns are read, the new turn sent, the response appended. |
 | `--model ROLE\|ID` | A logical role (`text`, `vision`, `video`, `image`, `image_pro`, `reason`) or an explicit model ID. |
-| `--size SIZE` | (`image` only) Output resolution: `1:1`, `4K`, `1024x1024`, etc. Passed through to the backend. |
+| `--size SIZE` | (`image` only) Output resolution — one of `512`, `1K`, `2K`, `4K`. |
 | `--aspect-ratio RATIO` | (`image` only) Aspect ratio hint: `1:1`, `16:9`, `4:3`, etc. |
 | `--endpoint VALUE` | (`image` only) Force the generation backend: `auto` (default), `interactions`, or `generate_content`. See below. |
 | `--cleanup` | (session commands) Delete this session's uploaded Files API objects. |
