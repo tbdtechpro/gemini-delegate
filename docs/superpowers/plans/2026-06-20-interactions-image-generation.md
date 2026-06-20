@@ -218,17 +218,10 @@ can adopt the same pattern later.
 """
 from __future__ import annotations
 
-import base64
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-from google.genai import types
-
-from . import media
 from .core import CoreError
-
-_API_REVISION = "2026-05-20"
 
 
 @dataclass
@@ -356,7 +349,14 @@ Expected: FAIL — `GenerateContentImageBackend` undefined.
 
 - [ ] **Step 3: Implement in `src/gemini_delegate/image_backends.py`**
 
-Append:
+First add these imports to the top of the module (this task is the first to use them):
+```python
+from google.genai import types
+
+from . import media
+```
+
+Then append:
 ```python
 def _gc_usage(resp: Any) -> dict[str, int]:
     um = getattr(resp, "usage_metadata", None)
@@ -477,7 +477,15 @@ Expected: FAIL — `InteractionsImageBackend` undefined.
 
 - [ ] **Step 3: Implement in `src/gemini_delegate/image_backends.py`**
 
-Append:
+First add these imports/constant to the top of the module (this task is the first to use them):
+```python
+import base64
+from pathlib import Path
+
+_API_REVISION = "2026-05-20"
+```
+
+Then append:
 ```python
 def _extract_interaction_images(interaction: Any) -> list[bytes]:
     out_img = getattr(interaction, "output_image", None)
