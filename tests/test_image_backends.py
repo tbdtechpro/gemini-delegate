@@ -1,9 +1,11 @@
 from types import SimpleNamespace
+import io
 
 import pytest
+from PIL import Image
 
 from gemini_delegate.core import CoreError
-from gemini_delegate.image_backends import ImageRequest, ImageResult, run_image
+from gemini_delegate.image_backends import ImageRequest, ImageResult, run_image, GenerateContentImageBackend
 
 
 class _StubBackend:
@@ -74,3 +76,47 @@ def test_unknown_policy_raises_core_error():
     with pytest.raises(CoreError) as exc:
         run_image(None, _req(), policy="nonsense", interactions=_StubBackend(), generate=_StubBackend())
     assert exc.value.type == "bad_endpoint"
+
+
+def _png_bytes(color=(10, 20, 30)):
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _gc_response(n_images=1, prompt_tokens=4, cand_tokens=11):
+    cands = []
+    for i in range(n_images):
+        part = SimpleNamespace(inline_data=SimpleNamespace(data=_png_bytes((i, i, i))))
+        cands.append(SimpleNamespace(content=SimpleNamespace(parts=[part])))
+    return SimpleNamespace(
+        candidates=cands,
+        usage_metadata=SimpleNamespace(prompt_token_count=prompt_tokens, candidates_token_count=cand_tokens),
+    )
+
+
+def test_generate_content_backend_returns_bytes_and_usage():
+    client = _StubBackend()
+    client.generate_content = lambda **kwargs: _gc_response(1)
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    client.models.generate_content.return_value = _gc_response(1)
+    req = ImageRequest(prompt="a cat", model_id="gemini-3.1-flash-image", size="4K", aspect_ratio="16:9")
+    result = GenerateContentImageBackend().generate(client, req)
+    assert len(result.images) == 1 and isinstance(result.images[0], bytes)
+    assert result.usage == {"input_tokens": 4, "output_tokens": 11}
+    cfg = client.models.generate_content.call_args.kwargs["config"]
+    assert "IMAGE" in [str(m).upper() for m in cfg.response_modalities]
+    assert cfg.image_config.image_size == "4K"
+    assert cfg.image_config.aspect_ratio == "16:9"
+
+
+def test_generate_content_backend_candidate_count_for_n():
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    client.models.generate_content.return_value = _gc_response(2)
+    req = ImageRequest(prompt="x", model_id="m", n=2)
+    result = GenerateContentImageBackend().generate(client, req)
+    assert len(result.images) == 2
+    cfg = client.models.generate_content.call_args.kwargs["config"]
+    assert cfg.candidate_count == 2
