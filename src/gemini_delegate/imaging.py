@@ -57,3 +57,54 @@ def parse_color(s: str) -> tuple[int, int, int]:
         except ValueError:
             pass
     raise ImagingError(f"unrecognized color {s!r} (use #RRGGBB or one of {sorted(_COLOR_NAMES)})")
+
+
+def chroma_key(
+    img: Image.Image, key_rgb: tuple[int, int, int], tolerance: int
+) -> tuple[Image.Image, dict]:
+    rgb = img.convert("RGB")
+    channels = rgb.split()
+
+    def near(channel: Image.Image, k: int) -> Image.Image:
+        return channel.point(lambda v, k=k: 255 if abs(v - k) <= tolerance else 0)
+
+    masks = [near(channels[i], key_rgb[i]) for i in range(3)]
+    key_mask = ImageChops.darker(ImageChops.darker(masks[0], masks[1]), masks[2])
+    alpha = ImageChops.invert(key_mask)  # 255 = keep, 0 = key out
+
+    out = rgb.convert("RGBA")
+    out.putalpha(alpha)
+
+    total = out.width * out.height
+    removed = alpha.histogram()[0]  # count of alpha == 0
+    w, h = out.size
+    corners = [
+        out.getpixel((0, 0))[3], out.getpixel((w - 1, 0))[3],
+        out.getpixel((0, h - 1))[3], out.getpixel((w - 1, h - 1))[3],
+    ]
+    stats = {
+        "removed_fraction": (removed / total) if total else 0.0,
+        "corners_transparent": all(a == 0 for a in corners),
+    }
+    return out, stats
+
+
+def validate_key(stats: dict) -> list[str]:
+    warnings: list[str] = []
+    removed = stats.get("removed_fraction", 0.0)
+    if removed < 0.05:
+        warnings.append(
+            f"transparency: only {removed:.0%} of pixels were removed — the background "
+            "may not have keyed cleanly (check the key color or regenerate)"
+        )
+    elif removed > 0.95:
+        warnings.append(
+            f"transparency: {removed:.0%} of the image was removed — the subject may "
+            "share the key color"
+        )
+    if not stats.get("corners_transparent", False):
+        warnings.append(
+            "transparency: image corners did not key out — the background may not be a "
+            "clean flat fill"
+        )
+    return warnings
