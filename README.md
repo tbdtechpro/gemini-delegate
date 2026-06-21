@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="gemini-delegate" width="260">
+</p>
+
 # gemini-delegate
 
 A general-purpose way for **Claude Code** to offload the multimodal work it's
