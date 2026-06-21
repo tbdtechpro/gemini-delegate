@@ -48,7 +48,7 @@ JSON envelope on stdout  ──►  subagent validates  ──►  clean result 
 |---|---|---|---|---|
 | **Image → text** · `describe` | Read, OCR, and analyze images | Some improvement *(big on dense OCR / fine technical detail)* | Significant improvement · [pytesseract](https://github.com/madmaze/pytesseract) *(OCR only)* | Significant improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
 | **Video → text** · `video` | Answer questions about a video file or YouTube URL | ❌ · no comparable option | ❌ · no comparable option | Significant improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
-| **Text → image** · `image` | Generate / edit images (Nano Banana), incl. transparent PNGs | ❌ · no comparable option | ❌ · no comparable option | Some improvement · [FLUX.1‑schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) |
+| **Text → image** · `image` | Generate / edit images (Nano Banana), incl. transparent PNGs | ❌ · no comparable option | ❌ · no comparable option | Significant improvement *(in-image text, editing)* · [FLUX.1‑schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) |
 | **Text / reasoning** · `ask` | Q&A, structured extraction, multi-turn follow-ups | Worse | ❌ · no comparable option | Equivalent · [Qwen2.5‑32B](https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF) |
 
 Each rating describes how the **Gemini** integration compares to that alternative
