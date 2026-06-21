@@ -10,12 +10,12 @@ feature is live.
 
 | Capability | What it would do | vs Claude Code | vs direct Python library | vs best free local model (RTX 3090) |
 |---|---|---|---|---|
-| **Text → speech** (TTS)<br/>`gemini-3.1-flash-tts` | Turn text into natural spoken audio (many voices, 100+ languages) | ❌ | Significant improvement · [pyttsx3](https://github.com/nateshmbhat/pyttsx3) *(espeak; robotic)* | Some improvement · [Kokoro‑82M](https://hf.co/hexgrad/Kokoro-82M) |
-| **Speech generation** (expressive)<br/>Interactions | Director-controlled, multi-speaker, tagged expressive speech | ❌ | Significant improvement · [pyttsx3](https://github.com/nateshmbhat/pyttsx3) | Significant improvement · [Kokoro‑82M](https://hf.co/hexgrad/Kokoro-82M) |
-| **Audio → text** (understanding)<br/>Interactions | Transcribe **and** answer questions about audio | ❌ | Significant improvement · [pocketsphinx](https://github.com/cmusphinx/pocketsphinx) *(classical ASR; dated)* | Some improvement · [Qwen2‑Audio‑7B](https://huggingface.co/Qwen/Qwen2-Audio-7B-Instruct) |
-| **Live** (realtime)<br/>`gemini-3.1-flash-live` | Low-latency bidirectional audio/video/text streaming | ❌ | ❌ | Some improvement · [Qwen2.5‑Omni‑7B](https://huggingface.co/Qwen/Qwen2.5-Omni-7B) |
-| **Text → music**<br/>`lyria-3-pro` | Generate full-length music from a prompt | ❌ | ❌ | Significant improvement · [musicgen‑large](https://huggingface.co/facebook/musicgen-large) |
-| **Text embeddings** | Turn text into vectors for search / similarity / RAG | ❌ | Significant improvement · [scikit‑learn TF‑IDF](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) *(lexical only)* | Equivalent · [Qwen3‑Embedding‑8B](https://huggingface.co/Qwen/Qwen3-Embedding-8B) |
+| **Text → speech** (TTS)<br/>`gemini-3.1-flash-tts` | Turn text into natural spoken audio (many voices, 100+ languages) | ❌ · no comparable option | Significant improvement · [pyttsx3](https://github.com/nateshmbhat/pyttsx3) *(espeak; robotic)* | Some improvement · [Kokoro‑82M](https://hf.co/hexgrad/Kokoro-82M) |
+| **Speech generation** (expressive)<br/>Interactions | Director-controlled, multi-speaker, tagged expressive speech | ❌ · no comparable option | Significant improvement · [pyttsx3](https://github.com/nateshmbhat/pyttsx3) | Significant improvement · [Kokoro‑82M](https://hf.co/hexgrad/Kokoro-82M) |
+| **Audio → text** (understanding)<br/>Interactions | Transcribe **and** answer questions about audio | ❌ · no comparable option | Significant improvement · [pocketsphinx](https://github.com/cmusphinx/pocketsphinx) *(classical ASR; dated)* | Some improvement · [Qwen2‑Audio‑7B](https://huggingface.co/Qwen/Qwen2-Audio-7B-Instruct) |
+| **Live** (realtime)<br/>`gemini-3.1-flash-live` | Low-latency bidirectional audio/video/text streaming | ❌ · no comparable option | ❌ · no comparable option | Some improvement · [Qwen2.5‑Omni‑7B](https://huggingface.co/Qwen/Qwen2.5-Omni-7B) |
+| **Text → music**<br/>`lyria-3-pro` | Generate full-length music from a prompt | ❌ · no comparable option | ❌ · no comparable option | Significant improvement · [musicgen‑large](https://huggingface.co/facebook/musicgen-large) |
+| **Text embeddings** | Turn text into vectors for search / similarity / RAG | ❌ · no comparable option | Significant improvement · [scikit‑learn TF‑IDF](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html) *(lexical only)* | Equivalent · [Qwen3‑Embedding‑8B](https://huggingface.co/Qwen/Qwen3-Embedding-8B) |
 
 Ratings describe how the **Gemini** capability compares to each alternative
 (*Worse / Equivalent / Some improvement / Significant improvement*; **❌** = no
