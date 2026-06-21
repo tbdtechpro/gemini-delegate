@@ -2,22 +2,28 @@
   <img src="assets/logo.png" alt="gemini-delegate" width="260">
 </p>
 
-# gemini-delegate
+<h1 align="center">gemini-delegate</h1>
 
-A general-purpose way for **Claude Code** to offload the multimodal work it's
-weaker at — **image-to-text, video-to-text, and text-to-image** — to the Google
-Gemini API, usable across any project.
+<p align="center">
+  <em>Give Claude Code a Gemini sidekick — image, video, and image-generation
+  skills it doesn't have natively, one shell command away.</em>
+</p>
 
-It's two strictly separated layers:
+`gemini-delegate` is a small, deterministic CLI (plus a Claude Code subagent that
+drives it) for handing the **multimodal work Claude is weaker at** —
+**image→text, video→text, and text→image** — to the Google Gemini API. It works
+in any project, prints one clean JSON envelope per call, and never puts your API
+key on the command line.
 
-- **Mechanism** — a thin, deterministic Python CLI (`gemini-delegate`) that does
-  nothing but talk to Gemini: build the request, transfer media, run the call,
-  persist multi-turn state, and print one structured JSON envelope. No judgment,
-  no project awareness.
+It's built as two strictly separated layers:
+
+- **Mechanism** — the `gemini-delegate` CLI. It only talks to Gemini: build the
+  request, move the media, run the call, persist multi-turn state, print one
+  JSON envelope. No judgment, no project awareness.
 - **Policy** — a Claude Code **subagent** that drives the CLI: it writes the
-  prompt, validates Gemini's output (including *reading* generated images, since
-  it's itself multimodal), structures results per project, follows up when
-  confidence is low, and returns only a clean artifact to the main session.
+  prompt, validates Gemini's output (it'll even *look at* a generated image,
+  since it's multimodal too), shapes results to your project, retries when
+  unsure, and hands back only the clean artifact.
 
 ```
 main Claude Code session
@@ -32,36 +38,65 @@ gemini-delegate CLI  ──►  core lib  ──►  Gemini API
 JSON envelope on stdout  ──►  subagent validates  ──►  clean result to main session
 ```
 
-> Status: **built and live-verified** — 57 offline unit tests (mocked client)
-> plus a live smoke test passing 4/4 across all subcommands.
+> **Status:** built and live-verified — **110 offline unit tests** (the Gemini
+> client is mocked; no network, no key) plus a gated live smoke test across every
+> subcommand.
 
-## Requirements
+## What it can do
 
-- Python ≥ 3.11 (uses stdlib `tomllib`)
-- A `GEMINI_API_KEY`, resolved (in order) from: the environment, then
-  `$GEMINI_DELEGATE_ENV`, then `~/.config/gemini-delegate/.env`. It is never
-  passed on the command line, never logged, never written to a session file.
-  The key file means every session and subagent gets the key with zero
-  discovery:
+| Capability | What it does | vs Claude Code | vs best free Python library | vs best free local model (RTX 3090) |
+|---|---|---|---|---|
+| **Image → text** · `describe` | Read, OCR, and analyze images | Equivalent | Some improvement · [transformers](https://github.com/huggingface/transformers) | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
+| **Video → text** · `video` | Answer questions about a video file or YouTube URL | ❌ | Some improvement · [transformers](https://github.com/huggingface/transformers) | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
+| **Text → image** · `image` | Generate / edit images (Nano Banana), incl. transparent PNGs | ❌ | Some improvement · [diffusers](https://github.com/huggingface/diffusers) | Some improvement · [FLUX.1‑schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) |
+| **Text / reasoning** · `ask` | Q&A, structured extraction, multi-turn follow-ups | Worse | Equivalent · [llama‑cpp‑python](https://github.com/abetlen/llama-cpp-python) | Equivalent · [Qwen2.5‑32B](https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF) |
 
-  ```sh
-  mkdir -p ~/.config/gemini-delegate
-  printf 'GEMINI_API_KEY=%s\n' "$YOUR_KEY" > ~/.config/gemini-delegate/.env
-  chmod 600 ~/.config/gemini-delegate/.env
-  ```
+Each rating describes how the **Gemini** integration compares to that alternative
+(*Worse / Equivalent / Some improvement / Significant improvement*; **❌** = no
+comparable option). The local-model column targets a single **NVIDIA RTX 3090
+(24 GB VRAM)**. This is a rough, hand-made guide — **not** based on benchmarks —
+and there are very likely capable Python libraries or local models our search
+didn't surface. (More capabilities — speech, audio understanding, music,
+embeddings — are on the [integration roadmap](docs/integration-roadmap.md).)
 
-## Install
+## Quick start
+
+**1. Get a Gemini API key.** Grab a free one from
+[Google AI Studio](https://aistudio.google.com/apikey) — sign in with a Google
+account and click **Create API key**. Drop it in the key file (read once, never
+logged, never passed on the command line):
+
+```sh
+mkdir -p ~/.config/gemini-delegate
+printf 'GEMINI_API_KEY=%s\n' "YOUR_KEY_HERE" > ~/.config/gemini-delegate/.env
+chmod 600 ~/.config/gemini-delegate/.env
+```
+
+(Or just `export GEMINI_API_KEY=…` in your shell — the CLI checks the environment
+first, then `$GEMINI_DELEGATE_ENV`, then that key file.)
+
+**2. Install the CLI** (Python ≥ 3.11):
 
 ```sh
 pipx install --editable .          # or: make install-editable
 gemini-delegate --help
 ```
 
-Install the driving subagent (user scope → available in every project):
+**3. Install the driving subagent** (user scope → available in every project):
 
 ```sh
 make install-agent                 # copies agents/gemini-delegate.md to ~/.claude/agents/
 ```
+
+**4. Try it:**
+
+```sh
+gemini-delegate describe photo.jpg --prompt "What's in this image? One sentence."
+gemini-delegate image --transparent --prompt "a small orange mascot, pixel art" --out mascot.png
+```
+
+From inside Claude Code, just ask: *"use the gemini-delegate subagent to describe
+these screenshots and pull out the error text as JSON."*
 
 ## Commands
 
@@ -76,16 +111,16 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 | Option | Meaning |
 |---|---|
 | `--prompt TEXT` | The instruction (one of `--prompt`/`--prompt-file` required everywhere). |
-| `--prompt-file PATH` | Read the prompt from a file — use for long/multi-line prompts (cleaner shell, fewer approval prompts). |
+| `--prompt-file PATH` | Read the prompt from a file — handy for long/multi-line prompts (cleaner shell, fewer approval prompts). |
 | `--json` | Request structured JSON (sets Gemini's JSON response mode). |
 | `--schema PATH` | A JSON Schema file; implies `--json`; enforced at the API boundary. |
 | `--session PATH` | Multi-turn: prior turns are read, the new turn sent, the response appended. |
 | `--model ROLE\|ID` | A logical role (`text`, `vision`, `video`, `image`, `image_pro`, `reason`) or an explicit model ID. |
 | `--size SIZE` | (`image` only) Output resolution — one of `512`, `1K`, `2K`, `4K`. |
 | `--aspect-ratio RATIO` | (`image` only) Aspect ratio hint: `1:1`, `16:9`, `4:3`, etc. |
-| `--endpoint VALUE` | (`image` only) Force the generation backend: `auto` (default), `interactions`, or `generate_content`. See below. |
+| `--endpoint VALUE` | (`image` only) Force the generation backend: `auto` (default), `interactions`, or `generate_content`. |
 | `--transparent` | (`image` only) Generate on a flat key color and chroma-key it to a transparent PNG/WebP. |
-| `--chroma-key COLOR` | (`image` only) The flat color to remove (e.g. `#FF00FF` or `magenta`). Default: `#FF00FF`. Implies keying without `--transparent` when specified alone. |
+| `--chroma-key COLOR` | (`image` only) The flat color to remove (e.g. `#FF00FF` or `magenta`). Default: `#FF00FF`. Implies keying without `--transparent` when used alone. |
 | `--chroma-tolerance INT` | (`image` only) Per-channel tolerance for the chroma-key (0–255). Default: `60`. |
 | `--keep-original` | (`image` only) Also save the un-keyed original beside the output as `<stem>.orig.jpg`. |
 | `--cleanup` | (session commands) Delete this session's uploaded Files API objects. |
@@ -93,8 +128,8 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 
 ### Image endpoint (Interactions vs generateContent)
 
-The `image` subcommand supports two generation backends, selectable via
-`--endpoint` on the CLI or `[image].endpoint` in the config:
+The `image` subcommand has two generation backends, picked via `--endpoint` or
+`[image].endpoint` in config:
 
 | Value | Behaviour |
 |---|---|
@@ -102,45 +137,37 @@ The `image` subcommand supports two generation backends, selectable via
 | `interactions` | Force the Interactions API (Beta). Best quality and 4K support; no free tier for `image_pro`. |
 | `generate_content` | Force the classic `generate_content` path. |
 
-The `interactions` path is the primary route as of 2026-06-20. Both paths
-produce the same JSON envelope; a `warnings` entry is added when an automatic
-fallback occurs so you know which backend was actually used.
+Both paths produce the same JSON envelope; a `warnings` entry is added when an
+automatic fallback happens, so you always know which backend ran.
 
 ```sh
-# Pro model, 4K output, forced Interactions path
+# Pro model, 4K, forced Interactions path
 gemini-delegate image --model image_pro --endpoint interactions \
   --size 4K --aspect-ratio 16:9 \
   --prompt "A red maple leaf on white, studio lighting" --out leaf.png
-
-# Explicit fallback for debugging
-gemini-delegate image --endpoint generate_content \
-  --prompt "A blue circle" --out circle.png
 ```
 
 ### Transparent images
 
-`--transparent` generates on a flat magenta key color (`#FF00FF`) and
-chroma-keys it out to an alpha channel, so you get a PNG or WebP with true
-transparency. A few things to keep in mind:
+`--transparent` generates on a flat magenta key color (`#FF00FF`) and chroma-keys
+it out to an alpha channel, so you get a PNG/WebP with true transparency. A few
+things to know:
 
-- **Don't add a background in your prompt.** Let the model fill the field with
-  the key color; asking for a specific background competes with the keying step.
-- **Output must be `.png` or `.webp`.** JPEG cannot store an alpha channel — the
-  CLI will reject a `.jpg`/`.jpeg` `--out` path with a usage error.
-- **JPEG-source caveat.** Gemini currently returns JPEG data internally, so
-  hard edges can accumulate faint fringing artifacts after keying. Two remedies:
-  - Tune `--chroma-tolerance` (default `60`) — a higher value removes more fringe
-    but may also eat into soft edges.
-  - Use `--keep-original` to save the un-keyed JPEG beside the output (as
-    `<stem>.orig.jpg`) and clean up manually in an image editor.
+- **Don't put a background in your prompt.** Let the model fill the field with
+  the key color; asking for a specific background fights the keying step.
+- **Output must be `.png` or `.webp`.** JPEG can't store alpha — a `.jpg`/`.jpeg`
+  `--out` is rejected with a usage error.
+- **JPEG-source caveat.** Gemini returns JPEG internally, so hard edges can pick
+  up faint fringing after keying. Tune `--chroma-tolerance`, or use
+  `--keep-original` to grab the un-keyed image and clean up by hand.
 
 ```sh
 gemini-delegate image --transparent --prompt "a small orange creature" --out creature.png
-# tolerance tuning
-gemini-delegate image --transparent --chroma-tolerance 80 --prompt "a small orange creature" --out creature.png
-# keep the un-keyed original for manual cleanup
-gemini-delegate image --transparent --keep-original --prompt "a small orange creature" --out creature.png
+gemini-delegate image --transparent --chroma-tolerance 80 --keep-original --prompt "a small orange creature" --out creature.png
 ```
+
+> Fun fact: this project's logo was generated by `gemini-delegate` itself via the
+> `--transparent` path.
 
 ## The output envelope
 
@@ -165,8 +192,6 @@ code from the result: `0` ok, `1` failure, `2` usage/argument error.
 On a JSON-parse failure the tool sets `ok:false` with an `error` — it never
 silently falls back to `text`.
 
-### Example
-
 ```sh
 $ gemini-delegate ask --prompt "Reply with exactly one word: pong"
 {"ok": true, "op": "ask", "model": "gemini-3.5-flash", "text": "pong", "json": null,
@@ -181,17 +206,16 @@ config, never code, so when Google moves a model you edit one file, not source.
 Resolution order: `$GEMINI_DELEGATE_CONFIG` →
 `~/.config/gemini-delegate/config.toml` → packaged default
 ([`config/gemini-delegate.toml`](config/gemini-delegate.toml)). A single role can
-also be pinned via `GEMINI_DELEGATE_MODEL_<ROLE>` (handy for a one-off run).
-
-Costs default to the cheap Flash-tier roles; `image_pro` (Nano Banana Pro) and
-`reason` are opt-in only.
+also be pinned via `GEMINI_DELEGATE_MODEL_<ROLE>` for a one-off run. Costs default
+to the cheap Flash-tier roles; `image_pro` (Nano Banana Pro) and `reason` are
+opt-in.
 
 ## Onboarding a project (the project hook)
 
 A consuming project can steer the subagent's output **without any code change**:
 drop a `./.claude/gemini.md` describing the desired output shape (e.g. a JSON
 Schema for extracted fields), naming conventions, and where generated assets go.
-The subagent reads it — together with the project `CLAUDE.md` — before every
+The subagent reads it — along with the project `CLAUDE.md` — before every
 delegation.
 
 ```sh
@@ -207,7 +231,7 @@ example (schema, asset naming, model/cost policy, validation expectations).
 ```sh
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-make test          # offline unit tests; the Gemini client is mocked (no network, no key)
+make test          # 110 offline unit tests; the Gemini client is mocked (no network, no key)
 ```
 
 The live smoke test is gated behind `RUN_LIVE=1` **and** a present
@@ -222,13 +246,16 @@ RUN_LIVE=1 python scripts/smoke_test.py     # one real call per subcommand
 ```
 config/gemini-delegate.toml   packaged default config (model roles, paths)
 src/gemini_delegate/
-  config.py   load TOML + env overrides, resolve model roles
-  media.py    inline vs Files API, sha256 upload cache, cleanup
-  session.py  session JSON read / append / write
-  core.py     all Gemini logic; returns plain dicts
-  cli.py      Click commands; wraps core into the envelope
+  config.py          load TOML + env overrides, resolve model roles
+  media.py           inline vs Files API, sha256 upload cache, cleanup
+  session.py         session JSON read / append / write
+  core.py            all Gemini logic; returns plain dicts
+  image_backends.py  Interactions + generateContent image backends, endpoint dispatch
+  imaging.py         transcode + chroma-key transparency (Pillow only)
+  cli.py             Click commands; wraps core into the JSON envelope
 agents/gemini-delegate.md     the subagent (installed to ~/.claude/agents/)
 examples/project-gemini.md    sample .claude/gemini.md for a consuming project
+docs/integration-roadmap.md   planned capabilities (speech, audio, music, embeddings)
 scripts/smoke_test.py         gated live smoke test
 tests/                        offline unit tests (mocked client)
 ```
