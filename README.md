@@ -44,20 +44,24 @@ JSON envelope on stdout  ──►  subagent validates  ──►  clean result 
 
 ## What it can do
 
-| Capability | What it does | vs Claude Code | vs best free Python library | vs best free local model (RTX 3090) |
+| Capability | What it does | vs Claude Code | vs direct Python library | vs best free local model (RTX 3090) |
 |---|---|---|---|---|
-| **Image → text** · `describe` | Read, OCR, and analyze images | Equivalent | Some improvement · [transformers](https://github.com/huggingface/transformers) | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
-| **Video → text** · `video` | Answer questions about a video file or YouTube URL | ❌ | Some improvement · [transformers](https://github.com/huggingface/transformers) | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
-| **Text → image** · `image` | Generate / edit images (Nano Banana), incl. transparent PNGs | ❌ | Some improvement · [diffusers](https://github.com/huggingface/diffusers) | Some improvement · [FLUX.1‑schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) |
-| **Text / reasoning** · `ask` | Q&A, structured extraction, multi-turn follow-ups | Worse | Equivalent · [llama‑cpp‑python](https://github.com/abetlen/llama-cpp-python) | Equivalent · [Qwen2.5‑32B](https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF) |
+| **Image → text** · `describe` | Read, OCR, and analyze images | Equivalent | Significant improvement · [pytesseract](https://github.com/madmaze/pytesseract) *(OCR only)* | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
+| **Video → text** · `video` | Answer questions about a video file or YouTube URL | ❌ | ❌ | Some improvement · [Qwen2.5‑VL‑7B](https://hf.co/Qwen/Qwen2.5-VL-7B-Instruct) |
+| **Text → image** · `image` | Generate / edit images (Nano Banana), incl. transparent PNGs | ❌ | ❌ | Some improvement · [FLUX.1‑schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell) |
+| **Text / reasoning** · `ask` | Q&A, structured extraction, multi-turn follow-ups | Worse | ❌ | Equivalent · [Qwen2.5‑32B](https://huggingface.co/bartowski/Qwen2.5-32B-Instruct-GGUF) |
 
 Each rating describes how the **Gemini** integration compares to that alternative
 (*Worse / Equivalent / Some improvement / Significant improvement*; **❌** = no
-comparable option). The local-model column targets a single **NVIDIA RTX 3090
-(24 GB VRAM)**. This is a rough, hand-made guide — **not** based on benchmarks —
-and there are very likely capable Python libraries or local models our search
-didn't surface. (More capabilities — speech, audio understanding, music,
-embeddings — are on the [integration roadmap](docs/integration-roadmap.md).)
+comparable option). The **Python** column looks for a library that does the task
+*directly* — a classical/algorithmic approach, **not** a wrapper around the
+neural model in the next column — so it's **❌** for anything that fundamentally
+needs a model (video understanding, image generation, general reasoning). The
+**local-model** column targets a single **NVIDIA RTX 3090 (24 GB VRAM)**. This is
+a rough, hand-made guide — **not** benchmarks — and there are surely capable
+libraries or models our search didn't surface. (More capabilities — speech, audio
+understanding, music, embeddings — are on the
+[integration roadmap](docs/integration-roadmap.md).)
 
 ## Quick start
 
