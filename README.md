@@ -65,6 +65,7 @@ make install-agent                 # copies agents/gemini-delegate.md to ~/.clau
 gemini-delegate describe <image...>  --prompt TEXT [--json] [--schema PATH] [--session PATH] [--model ROLE|ID]
 gemini-delegate video    <file|url>  --prompt TEXT [--json] [--schema PATH] [--session PATH] [--model ROLE|ID]
 gemini-delegate image    --prompt TEXT --out PATH [--ref PATH ...] [--n INT] [--model ROLE|ID]
+                         [--transparent] [--chroma-key COLOR] [--chroma-tolerance INT] [--keep-original]
 gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH] [--model ROLE|ID]
 ```
 
@@ -79,6 +80,10 @@ gemini-delegate ask      --prompt TEXT [--session PATH] [--json] [--schema PATH]
 | `--size SIZE` | (`image` only) Output resolution — one of `512`, `1K`, `2K`, `4K`. |
 | `--aspect-ratio RATIO` | (`image` only) Aspect ratio hint: `1:1`, `16:9`, `4:3`, etc. |
 | `--endpoint VALUE` | (`image` only) Force the generation backend: `auto` (default), `interactions`, or `generate_content`. See below. |
+| `--transparent` | (`image` only) Generate on a flat key color and chroma-key it to a transparent PNG/WebP. |
+| `--chroma-key COLOR` | (`image` only) The flat color to remove (e.g. `#FF00FF` or `magenta`). Default: `#FF00FF`. Implies keying without `--transparent` when specified alone. |
+| `--chroma-tolerance INT` | (`image` only) Per-channel tolerance for the chroma-key (0–255). Default: `60`. |
+| `--keep-original` | (`image` only) Also save the un-keyed original beside the output as `<stem>.orig.jpg`. |
 | `--cleanup` | (session commands) Delete this session's uploaded Files API objects. |
 | `--debug` | Print a traceback to **stderr** on failure (stdout stays clean JSON). |
 
@@ -106,6 +111,31 @@ gemini-delegate image --model image_pro --endpoint interactions \
 # Explicit fallback for debugging
 gemini-delegate image --endpoint generate_content \
   --prompt "A blue circle" --out circle.png
+```
+
+### Transparent images
+
+`--transparent` generates on a flat magenta key color (`#FF00FF`) and
+chroma-keys it out to an alpha channel, so you get a PNG or WebP with true
+transparency. A few things to keep in mind:
+
+- **Don't add a background in your prompt.** Let the model fill the field with
+  the key color; asking for a specific background competes with the keying step.
+- **Output must be `.png` or `.webp`.** JPEG cannot store an alpha channel — the
+  CLI will reject a `.jpg`/`.jpeg` `--out` path with a usage error.
+- **JPEG-source caveat.** Gemini currently returns JPEG data internally, so
+  hard edges can accumulate faint fringing artifacts after keying. Two remedies:
+  - Tune `--chroma-tolerance` (default `60`) — a higher value removes more fringe
+    but may also eat into soft edges.
+  - Use `--keep-original` to save the un-keyed JPEG beside the output (as
+    `<stem>.orig.jpg`) and clean up manually in an image editor.
+
+```sh
+gemini-delegate image --transparent --prompt "a small orange creature" --out creature.png
+# tolerance tuning
+gemini-delegate image --transparent --chroma-tolerance 80 --prompt "a small orange creature" --out creature.png
+# keep the un-keyed original for manual cleanup
+gemini-delegate image --transparent --keep-original --prompt "a small orange creature" --out creature.png
 ```
 
 ## The output envelope

@@ -126,6 +126,21 @@ def main() -> int:
             print("        NOTE: envelope ok but no non-empty file at --out; "
                   "image config (e.g. response_modalities) may need adjustment.")
 
+        # --- image (transparent): opt-in, gated behind SMOKE_TRANSPARENT=1 ---
+        if os.environ.get("SMOKE_TRANSPARENT") == "1":
+            out_t = tmpdir / "transparent.png"
+            code, env, out, err = _call(
+                binary,
+                ["image", "--transparent", "--prompt",
+                 "A simple solid blue circle", "--out", str(out_t)],
+            )
+            ok = out_t.is_file()
+            if ok:
+                from PIL import Image
+                im = Image.open(out_t)
+                ok = im.mode == "RGBA" and im.getpixel((0, 0))[3] == 0
+            results.append(_report("image:transparent", code, env, out, err, extra_ok=ok))
+
         # --- image (Pro / 4K / Interactions): opt-in, gated behind SMOKE_PRO=1 ---
         if os.environ.get("SMOKE_PRO") == "1":
             out_pro = tmpdir / "generated_pro.png"
