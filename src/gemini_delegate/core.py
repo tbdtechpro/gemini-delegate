@@ -214,7 +214,7 @@ def image(
     except Exception as exc:  # noqa: BLE001
         raise CoreError("image_error", str(exc), details={"model": model_id}) from exc
 
-    files = _render_outputs(result.images, out, key_rgb, chroma_tolerance, keep_original, warnings)
+    files = _render_outputs(result.images, out, key_rgb, chroma_tolerance, keep_original, warnings, model_id)
     if not files:
         raise CoreError("no_image", "model returned no image data", details={"model": model_id})
 
@@ -321,7 +321,7 @@ def _response_parts(resp: Any) -> list[types.Part]:
 
 def _render_outputs(
     images: list[bytes], out: str, key_rgb: tuple[int, int, int] | None,
-    tolerance: int, keep_original: bool, warnings: list[str],
+    tolerance: int, keep_original: bool, warnings: list[str], model_id: str = "",
 ) -> list[str]:
     """Decode API bytes; chroma-key when key_rgb is set, else transcode; save in the
     --out format. Appends keying warnings; optionally keeps the un-keyed original."""
@@ -338,11 +338,12 @@ def _render_outputs(
                 warnings.extend(imaging.validate_key(stats))
                 files.append(imaging.save_image(keyed, str(path)))
                 if keep_original:
-                    imaging.save_image(img, str(path.with_name(f"{path.stem}.orig.jpg")))
+                    orig_path = imaging.save_image(img, str(path.with_name(f"{path.stem}.orig.jpg")))
+                    files.append(orig_path)
             else:
                 files.append(imaging.save_image(img, str(path)))
         except imaging.ImagingError as exc:
-            raise CoreError("image_error", str(exc), details={}) from exc
+            raise CoreError("image_error", str(exc), details={"model": model_id}) from exc
     return files
 
 

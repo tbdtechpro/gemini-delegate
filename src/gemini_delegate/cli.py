@@ -130,7 +130,7 @@ def ask(prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
               help="Generate on a flat key color and chroma-key it to a transparent PNG.")
 @click.option("--chroma-key", "chroma_key", default=None,
               help="Key out this flat color to alpha (e.g. #FF00FF or magenta). Primitive under --transparent.")
-@click.option("--chroma-tolerance", "chroma_tolerance", default=60, type=int,
+@click.option("--chroma-tolerance", "chroma_tolerance", default=60, type=click.IntRange(0, 255),
               help="Per-channel keying tolerance (0-255). Default 60.")
 @click.option("--keep-original", "keep_original", is_flag=True,
               help="Also save the un-keyed original beside the output (<stem>.orig.jpg).")

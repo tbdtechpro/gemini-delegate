@@ -187,3 +187,13 @@ def test_image_transparent_with_jpg_is_usage_error(fake_gemini):
 def test_image_bad_chroma_key_color_is_usage_error(fake_gemini):
     res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--chroma-key", "nope"])
     assert res.exit_code == 2
+
+
+def test_image_chroma_tolerance_out_of_range_is_usage_error(fake_gemini):
+    res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--chroma-tolerance", "999"])
+    assert res.exit_code == 2
+
+
+def test_image_chroma_key_with_jpg_out_is_usage_error(fake_gemini):
+    res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.jpg", "--chroma-key", "#FF00FF"])
+    assert res.exit_code == 2

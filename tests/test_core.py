@@ -269,8 +269,10 @@ def test_image_keep_original_writes_both(cfg, tmp_path):
     client = MagicMock()
     client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
     out = tmp_path / "o.png"
-    core.image(client, cfg, prompt="x", out=str(out), transparent=True, keep_original=True)
+    result = core.image(client, cfg, prompt="x", out=str(out), transparent=True, keep_original=True)
     assert out.is_file() and (tmp_path / "o.orig.jpg").is_file()
+    orig_abs = str((tmp_path / "o.orig.jpg").resolve())
+    assert orig_abs in result["files"]
 
 
 def test_image_chroma_key_color_no_directive(cfg, tmp_path):
