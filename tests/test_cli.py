@@ -157,3 +157,33 @@ def test_image_size_aspect_endpoint_options(fake_gemini):
 def test_image_rejects_bad_size(fake_gemini):
     res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--size", "8K"])
     assert res.exit_code == 2  # not in choice 512/1K/2K/4K
+
+
+def test_image_transparent_flag(fake_gemini):
+    import io as _io, base64
+    from types import SimpleNamespace
+    from PIL import Image
+    src = Image.new("RGB", (16, 16), (255, 0, 255))
+    for x in range(6, 10):
+        for y in range(6, 10):
+            src.putpixel((x, y), (0, 200, 0))
+    buf = _io.BytesIO(); src.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    fake_gemini.interactions.create.return_value = SimpleNamespace(
+        output_image=None, steps=[SimpleNamespace(content=[SimpleNamespace(type="image", data=b64)])],
+        usage=SimpleNamespace(input_tokens=1, output_tokens=1))
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        res = runner.invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--transparent"])
+        assert res.exit_code == 0
+        assert Image.open("o.png").mode == "RGBA"
+
+
+def test_image_transparent_with_jpg_is_usage_error(fake_gemini):
+    res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.jpg", "--transparent"])
+    assert res.exit_code == 2
+
+
+def test_image_bad_chroma_key_color_is_usage_error(fake_gemini):
+    res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.png", "--chroma-key", "nope"])
+    assert res.exit_code == 2

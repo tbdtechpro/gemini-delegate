@@ -126,17 +126,36 @@ def ask(prompt, prompt_file, want_json, schema, session, model, cleanup, debug):
               help="Aspect ratio, e.g. 1:1, 16:9, 4:3.")
 @click.option("--endpoint", type=click.Choice(["auto", "interactions", "generate_content"]),
               default=None, help="Override the image endpoint (default from config).")
+@click.option("--transparent", is_flag=True,
+              help="Generate on a flat key color and chroma-key it to a transparent PNG.")
+@click.option("--chroma-key", "chroma_key", default=None,
+              help="Key out this flat color to alpha (e.g. #FF00FF or magenta). Primitive under --transparent.")
+@click.option("--chroma-tolerance", "chroma_tolerance", default=60, type=int,
+              help="Per-channel keying tolerance (0-255). Default 60.")
+@click.option("--keep-original", "keep_original", is_flag=True,
+              help="Also save the un-keyed original beside the output (<stem>.orig.jpg).")
 @click.option("--debug", is_flag=True, help="Print a traceback to stderr on failure.")
-def image(prompt, prompt_file, out, refs, n, model, size, aspect_ratio, endpoint, debug):
+def image(prompt, prompt_file, out, refs, n, model, size, aspect_ratio, endpoint,
+          transparent, chroma_key, chroma_tolerance, keep_original, debug):
     """Text (+ optional refs) -> generated image file(s)."""
     if n < 1:
         raise click.UsageError("--n must be >= 1")
     prompt = _resolve_prompt(prompt, prompt_file)
+    if (transparent or chroma_key) and Path(out).suffix.lower() in (".jpg", ".jpeg"):
+        raise click.UsageError("transparency needs an alpha-capable --out (.png or .webp), not JPEG")
+    if chroma_key:
+        from . import imaging
+        try:
+            imaging.parse_color(chroma_key)
+        except imaging.ImagingError as exc:
+            raise click.UsageError(str(exc))
 
     def run(client):
         return core.image(
             client, load_config(), prompt=prompt, out=out, refs=list(refs), model=model, n=n,
             size=size, aspect_ratio=aspect_ratio, endpoint=endpoint,
+            transparent=transparent, chroma_key=chroma_key,
+            chroma_tolerance=chroma_tolerance, keep_original=keep_original,
         )
 
     _emit("image", debug, run)
