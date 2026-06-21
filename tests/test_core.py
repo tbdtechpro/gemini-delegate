@@ -229,6 +229,61 @@ def test_image_transcodes_jpeg_to_png_out(cfg, tmp_path):
     assert Image.open(out).format == "PNG"  # real PNG, not JPEG-bytes-in-a-.png
 
 
+# --- image: transparency / chroma-key ----------------------------------------
+
+
+def test_image_transparent_keys_and_injects_directive(cfg, tmp_path):
+    from PIL import Image
+    import io as _io, base64
+    # backend returns a magenta field with a small green square (keyable)
+    src = Image.new("RGB", (16, 16), (255, 0, 255))
+    for x in range(6, 10):
+        for y in range(6, 10):
+            src.putpixel((x, y), (0, 200, 0))
+    buf = _io.BytesIO(); src.save(buf, format="PNG")
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
+    out = tmp_path / "logo.png"
+    core.image(client, cfg, prompt="a creature", out=str(out), transparent=True)
+    assert Image.open(out).mode == "RGBA"
+    assert Image.open(out).getpixel((0, 0))[3] == 0  # bg keyed out
+    # directive was appended to the prompt the backend received
+    sent = client.interactions.create.call_args.kwargs["input"][0]["text"]
+    assert "magenta" in sent.lower() and "a creature" in sent
+
+
+def test_image_transparent_questionable_keying_warns(cfg, tmp_path):
+    from PIL import Image
+    import io as _io
+    buf = _io.BytesIO(); Image.new("RGB", (16, 16), (0, 0, 200)).save(buf, format="PNG")  # no magenta
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
+    result = core.image(client, cfg, prompt="x", out=str(tmp_path / "o.png"), transparent=True)
+    assert any("key" in w for w in result["warnings"])  # ~0% removed -> warning
+
+
+def test_image_keep_original_writes_both(cfg, tmp_path):
+    from PIL import Image
+    import io as _io
+    buf = _io.BytesIO(); Image.new("RGB", (16, 16), (255, 0, 255)).save(buf, format="JPEG")
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
+    out = tmp_path / "o.png"
+    core.image(client, cfg, prompt="x", out=str(out), transparent=True, keep_original=True)
+    assert out.is_file() and (tmp_path / "o.orig.jpg").is_file()
+
+
+def test_image_chroma_key_color_no_directive(cfg, tmp_path):
+    from PIL import Image
+    import io as _io
+    buf = _io.BytesIO(); Image.new("RGB", (16, 16), (0, 255, 0)).save(buf, format="PNG")
+    client = MagicMock()
+    client.interactions.create.return_value = _interaction_response(payload=buf.getvalue())
+    core.image(client, cfg, prompt="just this", out=str(tmp_path / "o.png"), chroma_key="#00FF00")
+    sent = client.interactions.create.call_args.kwargs["input"][0]["text"]
+    assert sent == "just this"  # primitive does NOT inject a directive
+
+
 # --- sessions -----------------------------------------------------------------
 
 

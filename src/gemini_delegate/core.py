@@ -20,6 +20,12 @@ from .session import Session
 
 _JSON_MIME = "application/json"
 
+_TRANSPARENT_DIRECTIVE = (
+    "Render the entire subject on a solid, flat, uniform {name} ({hexv}) background "
+    "— one single flat fill color, with no other background elements, no checkerboard "
+    "or transparency pattern, no gradient, no texture, and no shadow on the background."
+)
+
 
 class CoreError(Exception):
     """A failure inside a core operation, with optional envelope context."""
@@ -175,11 +181,26 @@ def image(
     size: str | None = None,
     aspect_ratio: str | None = None,
     endpoint: str | None = None,
+    transparent: bool = False,
+    chroma_key: str | None = None,
+    chroma_tolerance: int = 60,
+    keep_original: bool = False,
 ) -> dict[str, Any]:
-    from . import image_backends as ib  # local import avoids a circular import at module load
+    from . import image_backends as ib
+    from . import imaging
 
     model_id = cfg.resolve_model(model or cfg.default_role("image"))
     policy = endpoint or cfg.image_endpoint
+
+    do_key = transparent or chroma_key is not None
+    key_rgb = None
+    if do_key:
+        key_rgb = imaging.parse_color(chroma_key) if chroma_key else (255, 0, 255)
+    if transparent:
+        name = chroma_key or "magenta"
+        hexv = "#%02X%02X%02X" % key_rgb
+        prompt = prompt + "\n\n" + _TRANSPARENT_DIRECTIVE.format(name=name, hexv=hexv)
+
     req = ib.ImageRequest(
         prompt=prompt, model_id=model_id, refs=list(refs), n=n, size=size, aspect_ratio=aspect_ratio
     )
@@ -190,11 +211,13 @@ def image(
         )
     except CoreError:
         raise
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         raise CoreError("image_error", str(exc), details={"model": model_id}) from exc
-    files = _render_outputs(result.images, out)
+
+    files = _render_outputs(result.images, out, key_rgb, chroma_tolerance, keep_original, warnings)
     if not files:
         raise CoreError("no_image", "model returned no image data", details={"model": model_id})
+
     extras = ", ".join(x for x in (f"size={size}" if size else "", f"aspect={aspect_ratio}" if aspect_ratio else "") if x)
     warnings.append(f"image endpoint: {used}" + (f" ({extras})" if extras else ""))
     return {
@@ -296,8 +319,12 @@ def _response_parts(resp: Any) -> list[types.Part]:
     return [types.Part(text=getattr(resp, "text", "") or "")]
 
 
-def _render_outputs(images: list[bytes], out: str) -> list[str]:
-    """Decode API bytes and save each in the format implied by the out extension."""
+def _render_outputs(
+    images: list[bytes], out: str, key_rgb: tuple[int, int, int] | None,
+    tolerance: int, keep_original: bool, warnings: list[str],
+) -> list[str]:
+    """Decode API bytes; chroma-key when key_rgb is set, else transcode; save in the
+    --out format. Appends keying warnings; optionally keeps the un-keyed original."""
     from . import imaging
 
     out_path = Path(out)
@@ -306,7 +333,14 @@ def _render_outputs(images: list[bytes], out: str) -> list[str]:
         path = out_path if i == 0 else out_path.with_name(f"{out_path.stem}_{i + 1}{out_path.suffix}")
         try:
             img = imaging.decode(data)
-            files.append(imaging.save_image(img, str(path)))
+            if key_rgb is not None:
+                keyed, stats = imaging.chroma_key(img, key_rgb, tolerance)
+                warnings.extend(imaging.validate_key(stats))
+                files.append(imaging.save_image(keyed, str(path)))
+                if keep_original:
+                    imaging.save_image(img, str(path.with_name(f"{path.stem}.orig.jpg")))
+            else:
+                files.append(imaging.save_image(img, str(path)))
         except imaging.ImagingError as exc:
             raise CoreError("image_error", str(exc), details={}) from exc
     return files
