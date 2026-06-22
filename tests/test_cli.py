@@ -197,3 +197,30 @@ def test_image_chroma_tolerance_out_of_range_is_usage_error(fake_gemini):
 def test_image_chroma_key_with_jpg_out_is_usage_error(fake_gemini):
     res = CliRunner().invoke(cli, ["image", "--prompt", "x", "--out", "o.jpg", "--chroma-key", "#FF00FF"])
     assert res.exit_code == 2
+
+
+def _grounded(text="grounded answer"):
+    from types import SimpleNamespace
+    gm = SimpleNamespace(
+        grounding_chunks=[SimpleNamespace(web=SimpleNamespace(uri="https://x.example/p", title="X", domain="x.example"))],
+        web_search_queries=["q"])
+    return SimpleNamespace(text=text, candidates=[SimpleNamespace(grounding_metadata=gm)],
+                           usage_metadata=SimpleNamespace(prompt_token_count=1, candidates_token_count=2))
+
+
+def test_search_command(fake_gemini):
+    fake_gemini.models.generate_content.return_value = _grounded()
+    res = CliRunner().invoke(cli, ["search", "--prompt", "find docs"])
+    assert res.exit_code == 0
+    env = json.loads(res.output)
+    assert env["op"] == "search"
+    assert env["text"] == "grounded answer"
+    assert env["json"]["sources"][0]["uri"] == "https://x.example/p"
+    # google_search tool was enabled
+    sent = fake_gemini.models.generate_content.call_args.kwargs["config"]
+    assert sent.tools and sent.tools[0].google_search is not None
+
+
+def test_search_requires_prompt(fake_gemini):
+    res = CliRunner().invoke(cli, ["search"])
+    assert res.exit_code == 2

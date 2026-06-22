@@ -161,6 +161,24 @@ def image(prompt, prompt_file, out, refs, n, model, size, aspect_ratio, endpoint
     _emit("image", debug, run)
 
 
+@cli.command()
+@click.option("--prompt", default=None, help="The search query / question.")
+@click.option(
+    "--prompt-file", "prompt_file", type=click.Path(exists=True, dir_okay=False),
+    help="Read the query from a file.",
+)
+@click.option("--model", default=None, help="Logical role or explicit model ID.")
+@click.option("--debug", is_flag=True, help="Print a traceback to stderr on failure.")
+def search(prompt, prompt_file, model, debug):
+    """Grounded Google web search -> answer + sources."""
+    prompt = _resolve_prompt(prompt, prompt_file)
+
+    def run(client):
+        return core.search(client, load_config(), prompt=prompt, model=model)
+
+    _emit("search", debug, run)
+
+
 # --- shared helpers -------------------------------------------------------------
 
 

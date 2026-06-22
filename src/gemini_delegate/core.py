@@ -226,6 +226,41 @@ def image(
     }
 
 
+def search(
+    client: Any,
+    cfg: Config,
+    *,
+    prompt: str,
+    model: str | None = None,
+) -> dict[str, Any]:
+    """Grounded web search via Gemini's Google Search tool (CLAUDE.md amended).
+
+    Returns the grounded answer as text and the web citations + queries as the
+    `json` field. Good for niche / non-English / very-recent topics where
+    Claude Code's native web search comes up short.
+    """
+    model_id = cfg.resolve_model(model or cfg.default_role("search"))
+    config = types.GenerateContentConfig(
+        tools=[types.Tool(google_search=types.GoogleSearch())]
+    )
+    resp = client.models.generate_content(
+        model=model_id,
+        contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
+        config=config,
+    )
+    grounding = _extract_grounding(resp)
+    warnings: list[str] = []
+    if not grounding["sources"]:
+        warnings.append(
+            "no web grounding sources returned — the model may have answered "
+            "without searching; treat the answer as ungrounded"
+        )
+    return {
+        "op": "search", "model": model_id, "text": resp.text, "json": grounding,
+        "files": [], "session": None, "usage": _usage(resp), "warnings": warnings,
+    }
+
+
 # --- shared text-op machinery ---------------------------------------------------
 
 
@@ -355,3 +390,24 @@ def _usage(resp: Any) -> dict[str, int]:
         "input_tokens": getattr(um, "prompt_token_count", 0) or 0,
         "output_tokens": getattr(um, "candidates_token_count", 0) or 0,
     }
+
+
+def _extract_grounding(resp: Any) -> dict[str, Any]:
+    """Pull web citations + the searches Gemini ran from grounding_metadata."""
+    try:
+        gm = resp.candidates[0].grounding_metadata
+    except (AttributeError, IndexError, TypeError):
+        gm = None
+    sources: list[dict[str, Any]] = []
+    queries: list[str] = []
+    if gm is not None:
+        for chunk in getattr(gm, "grounding_chunks", None) or []:
+            web = getattr(chunk, "web", None)
+            if web is not None and getattr(web, "uri", None):
+                sources.append({
+                    "uri": web.uri,
+                    "title": getattr(web, "title", None),
+                    "domain": getattr(web, "domain", None),
+                })
+        queries = list(getattr(gm, "web_search_queries", None) or [])
+    return {"sources": sources, "queries": queries}

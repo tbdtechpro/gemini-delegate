@@ -313,3 +313,50 @@ def test_describe_with_session_forces_upload(cfg, tmp_path):
     # Small image that would normally go inline, but a session forces the Files API.
     core.describe(client, cfg, images=[str(_png(tmp_path))], prompt="x", session_path=str(path))
     client.files.upload.assert_called_once()
+
+
+# --- search (grounded web search) ---------------------------------------------
+
+
+def _grounded_response(text="Paris is the capital.", with_sources=True):
+    chunks = []
+    if with_sources:
+        chunks = [
+            SimpleNamespace(web=SimpleNamespace(uri="https://a.example/doc", title="Doc A", domain="a.example")),
+            SimpleNamespace(web=SimpleNamespace(uri="https://b.example/forum", title="Forum B", domain="b.example")),
+        ]
+    gm = SimpleNamespace(grounding_chunks=chunks, web_search_queries=["capital of france"])
+    cand = SimpleNamespace(grounding_metadata=gm)
+    return SimpleNamespace(text=text, candidates=[cand],
+                           usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=20))
+
+
+def test_search_returns_answer_and_sources(cfg):
+    client = MagicMock()
+    client.models.generate_content.return_value = _grounded_response()
+    result = core.search(client, cfg, prompt="what is the capital of france?")
+    assert result["op"] == "search"
+    assert result["text"] == "Paris is the capital."
+    assert result["model"] == cfg.resolve_model("search")
+    assert [s["uri"] for s in result["json"]["sources"]] == ["https://a.example/doc", "https://b.example/forum"]
+    assert result["json"]["sources"][0] == {"uri": "https://a.example/doc", "title": "Doc A", "domain": "a.example"}
+    assert result["json"]["queries"] == ["capital of france"]
+    assert result["usage"] == {"input_tokens": 10, "output_tokens": 20}
+    # the google_search tool was enabled on the call
+    sent = client.models.generate_content.call_args.kwargs["config"]
+    assert sent.tools and sent.tools[0].google_search is not None
+
+
+def test_search_warns_when_no_grounding(cfg):
+    client = MagicMock()
+    client.models.generate_content.return_value = _grounded_response(with_sources=False)
+    result = core.search(client, cfg, prompt="hi")
+    assert result["json"]["sources"] == []
+    assert any("grounding" in w.lower() for w in result["warnings"])
+
+
+def test_search_explicit_model_override(cfg):
+    client = MagicMock()
+    client.models.generate_content.return_value = _grounded_response()
+    core.search(client, cfg, prompt="x", model="reason")
+    assert client.models.generate_content.call_args.kwargs["model"] == cfg.resolve_model("reason")

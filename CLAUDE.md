@@ -60,6 +60,16 @@ through the `interactions` surface by default (Beta); `generate_content` remains
 the automatic fallback. Config: `[image].endpoint = auto|interactions|generate_content`.
 See §2.2 amendment and `docs/superpowers/specs/2026-06-20-interactions-image-generation-design.md`.
 
+**Amendment (2026-06-21) — `search` op.** Added a fifth op, `search`: grounded
+Google web search via `generate_content` with `tools=[google_search]` (`search`
+model role, default `gemini-3.5-flash`). Envelope `text` = grounded answer,
+`json` = `{sources:[{uri,title,domain}], queries:[...]}` from
+`candidate.grounding_metadata` (`core._extract_grounding`). This consciously
+widens scope beyond "multimodal work Claude is weaker at" — it's for long-tail /
+non-English / very-recent searches Claude Code's native search misses. Kept
+simple per the user: no human-confirm gate, no `--schema`/`--session` in v1
+(grounding + response_schema also conflict at the API). Billed per query.
+
 ---
 
 ## 1. What we're building

@@ -127,3 +127,11 @@ def test_image_endpoint_override(tmp_path):
     p.write_text('[image]\nendpoint = "interactions"\n')
     cfg = load_config(explicit_path=str(p))
     assert cfg.image_endpoint == "interactions"
+
+
+def test_search_role_and_default():
+    cfg = load_config()
+    # `search` is a real configured role (resolves to a model id, not passthrough)
+    assert cfg.resolve_model("search") == cfg.models["search"]
+    assert cfg.models["search"]  # non-empty
+    assert cfg.default_role("search") == "search"

@@ -48,7 +48,7 @@ work.
    specifies (or you can write) a JSON Schema, prefer `--schema PATH` so the
    structure is enforced at the API boundary, not just hoped for.
 
-## The four subcommands
+## The subcommands
 
 Map every task to exactly one:
 
@@ -58,6 +58,13 @@ Map every task to exactly one:
 | Understand a video (file or YouTube URL) | `gemini-delegate video <file\|url> --prompt …` |
 | Generate or edit an image | `gemini-delegate image --prompt … --out PATH [--ref …]` |
 | Text question / follow-up reasoning | `gemini-delegate ask --prompt …` |
+| Grounded web search (long-tail) | `gemini-delegate search --prompt …` |
+
+**`search` is grounded Google web search** — it returns an answer plus the source
+URLs in the `json` field. Claude Code has a capable native web search, so prefer
+that by default; reach for `gemini-delegate search` only on the long tail —
+niche, non-English, or very-recent topics the native search misses. Surface the
+returned source URLs so the main session can follow them.
 
 Common options: `--json` (structured output), `--schema PATH` (implies `--json`,
 enforces a JSON Schema), `--session PATH` (multi-turn — reuse the same path
