@@ -17,7 +17,7 @@ quick orientation for a session picking the project up.
   `config.py` → `media.py`/`session.py` → `core.py` → `cli.py`. The layering in
   §6 holds: only `cli.py` knows the envelope and exit codes; only `config.py`
   knows model IDs.
-- **Tests:** 57 offline unit tests, Gemini client mocked, no network.
+- **Tests:** 122 offline unit tests, Gemini client mocked, no network.
   `make test` (or `python -m pytest`) runs them. Shared CLI fakes are in
   `tests/_helpers.py` / `tests/conftest.py`.
 - **Live smoke test:** `scripts/smoke_test.py`, gated behind `RUN_LIVE=1` + a
@@ -85,7 +85,8 @@ non-zero exit instead of a hang. (`config.request_timeout_ms` is the ms accessor
 
 A general-purpose way for Claude Code to offload multimodal work it's weaker
 at — **image-to-text, video-to-text, and text-to-image** — to the Google
-Gemini API, usable across any project.
+Gemini API, usable across any project. A fifth op, **grounded web search**, was
+added later (§0 amendment) for long-tail / non-English / very-recent queries.
 
 Two layers, strictly separated:
 
@@ -181,9 +182,10 @@ Python **≥ 3.11** (so `tomllib` is in the stdlib).
 
 ## 4. CLI contract — commands
 
-Console script: `gemini-delegate`. Four subcommands map 1:1 to the supported
+Console script: `gemini-delegate`. Five subcommands map 1:1 to the supported
 operations. Common options (`--json`, `--schema`, `--session`, `--model`) behave
-identically across commands.
+identically across commands. (`search` takes a reduced option set — see the §0
+amendment.)
 
 ```
 gemini-delegate describe <image...>     --prompt TEXT [--json] [--schema PATH]
@@ -197,6 +199,8 @@ gemini-delegate image    --prompt TEXT   --out PATH [--ref PATH ...]
 
 gemini-delegate ask      --prompt TEXT   [--session PATH] [--json] [--schema PATH]
                                          [--model ROLE|ID]
+
+gemini-delegate search   --prompt TEXT   [--prompt-file PATH] [--model ROLE|ID]
 ```
 
 Option semantics:
@@ -278,12 +282,14 @@ caller passed something that isn't a known role, treat it as an explicit ID.
   and expose an optional `--cleanup` to delete session files explicitly. Note in
   output `warnings` if a referenced upload looks expired.
 
-**The four operations** (`core.py`), each returning a plain dict the CLI wraps:
+**The operations** (`core.py`), each returning a plain dict the CLI wraps:
 - `describe` — vision model, image part(s) + prompt → text/json.
 - `video` — video model, uploaded video (or URL) + prompt → text/json.
 - `image` — image model, prompt (+ optional refs) → write `inline_data` parts to
   disk (`part.as_image().save(...)`), return file paths.
 - `ask` — text model, prompt only (plus session history if any) → text/json.
+- `search` — text model + `tools=[google_search]`, prompt → grounded answer
+  (text) + citations (`json`); see the §0 amendment.
 
 **Structured output.** When `--json`/`--schema` is set, pass
 `response_mime_type="application/json"` (and `response_schema` when a schema is
@@ -309,8 +315,9 @@ Frontmatter:
 name: gemini-delegate
 description: >
   Delegates multimodal work to the Gemini API — image-to-text, video-to-text,
-  and text-to-image. Use PROACTIVELY whenever a task needs image or video
-  understanding, or image generation, that Gemini handles better than Claude.
+  and text-to-image — plus grounded Google web search. Use PROACTIVELY whenever a
+  task needs image or video understanding, image generation, or a grounded web
+  search (niche / non-English / very-recent) that Gemini handles better than Claude.
 tools: Bash, Read, Write
 model: sonnet
 ---
@@ -323,7 +330,7 @@ The body must instruct the subagent to:
 2. **Read project conventions first.** Check `./.claude/gemini.md` and the
    project `CLAUDE.md` for the desired output schema/format, and prefer the CLI's
    `--schema` so structure is enforced at the API boundary.
-3. **Map the task to one of the four subcommands** and build a precise prompt.
+3. **Map the task to one of the five subcommands** and build a precise prompt.
 4. **Parse the JSON envelope** from stdout; honor `ok` and the exit code. Never
    parse prose.
 5. **Validate per flow before returning:**
@@ -440,7 +447,7 @@ If a task seems to need one of the remaining items above, stop and ask rather th
 ## 14. Definition of done
 
 - [ ] `pipx install --editable .` puts `gemini-delegate` on PATH; `--help` works.
-- [ ] All four subcommands parse and produce a valid envelope on mocked calls.
+- [ ] All five subcommands parse and produce a valid envelope on mocked calls.
 - [ ] Exit codes match the contract; the API key never appears in output.
 - [ ] Multi-turn sessions persist and replay correctly.
 - [ ] `--schema` enforces and validates structured output.

@@ -11,9 +11,9 @@
 
 `gemini-delegate` is a small, deterministic CLI (plus a Claude Code subagent that
 drives it) for handing the **multimodal work Claude is weaker at** —
-**image→text, video→text, and text→image** — to the Google Gemini API. It works
-in any project, prints one clean JSON envelope per call, and never puts your API
-key on the command line.
+**image→text, video→text, and text→image** — to the Google Gemini API, plus
+**grounded web search** for the long tail. It works in any project, prints one
+clean JSON envelope per call, and never puts your API key on the command line.
 
 It's built as two strictly separated layers:
 
@@ -38,7 +38,7 @@ gemini-delegate CLI  ──►  core lib  ──►  Gemini API
 JSON envelope on stdout  ──►  subagent validates  ──►  clean result to main session
 ```
 
-> **Status:** built and live-verified — **110 offline unit tests** (the Gemini
+> **Status:** built and live-verified — **122 offline unit tests** (the Gemini
 > client is mocked; no network, no key) plus a gated live smoke test across every
 > subcommand.
 
@@ -256,7 +256,7 @@ example (schema, asset naming, model/cost policy, validation expectations).
 ```sh
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-make test          # 110 offline unit tests; the Gemini client is mocked (no network, no key)
+make test          # 122 offline unit tests; the Gemini client is mocked (no network, no key)
 ```
 
 The live smoke test is gated behind `RUN_LIVE=1` **and** a present

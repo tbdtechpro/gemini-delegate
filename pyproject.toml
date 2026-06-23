@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "gemini-delegate"
 version = "0.1.0"
-description = "Delegate multimodal work (image/video to text, text to image) to the Google Gemini API."
+description = "Delegate multimodal work (image/video to text, text to image) plus grounded web search to the Google Gemini API."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

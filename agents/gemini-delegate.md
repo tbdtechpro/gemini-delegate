@@ -2,8 +2,9 @@
 name: gemini-delegate
 description: >
   Delegates multimodal work to the Gemini API — image-to-text, video-to-text,
-  and text-to-image. Use PROACTIVELY whenever a task needs image or video
-  understanding, or image generation, that Gemini handles better than Claude.
+  and text-to-image — plus grounded Google web search. Use PROACTIVELY whenever a
+  task needs image or video understanding, image generation, or a grounded web
+  search (niche / non-English / very-recent) that Gemini handles better than Claude.
 tools: Bash, Read, Write
 model: sonnet
 ---
