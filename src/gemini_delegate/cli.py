@@ -219,8 +219,27 @@ def _emit(op: str, debug: bool, run: Callable[[Any], dict[str, Any]]) -> None:
         if debug:
             traceback.print_exc(file=sys.stderr)
         env = _blank(op)
-        env["error"] = {"type": "internal", "message": str(exc)}
+        if _is_timeout(exc):
+            env["error"] = {
+                "type": "timeout",
+                "message": "the Gemini request exceeded the configured timeout "
+                           "(raise it via $GEMINI_DELEGATE_TIMEOUT or [client].timeout_seconds)",
+            }
+        else:
+            env["error"] = {"type": "internal", "message": str(exc)}
         _print_and_exit(env, 1)
+
+
+def _is_timeout(exc: BaseException) -> bool:
+    """True if an exception is a request-timeout (so the envelope can say so)."""
+    if "timeout" in type(exc).__name__.lower():
+        return True
+    try:
+        import httpx
+
+        return isinstance(exc, httpx.TimeoutException)
+    except Exception:  # noqa: BLE001 — httpx absent shouldn't break error handling
+        return False
 
 
 def _error_envelope(op: str, exc: core.CoreError) -> dict[str, Any]:

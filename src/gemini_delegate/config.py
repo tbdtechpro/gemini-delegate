@@ -26,6 +26,7 @@ from typing import Any
 
 _ENV_CONFIG_PATH = "GEMINI_DELEGATE_CONFIG"
 _ENV_MODEL_PREFIX = "GEMINI_DELEGATE_MODEL_"
+_ENV_TIMEOUT = "GEMINI_DELEGATE_TIMEOUT"  # request timeout in seconds (overrides config)
 
 
 class ConfigError(Exception):
@@ -68,6 +69,24 @@ class Config:
     @property
     def image_endpoint(self) -> str:
         return self._data.get("image", {}).get("endpoint", "auto")
+
+    @property
+    def request_timeout_ms(self) -> int | None:
+        """Client-side request timeout in milliseconds (google-genai's unit).
+
+        Resolution: ``GEMINI_DELEGATE_TIMEOUT`` (seconds) overrides
+        ``[client].timeout_seconds`` (default 120s). A value <= 0 opts out
+        entirely (returns ``None`` — no client-side timeout). Generous by
+        default because a grounded ``search`` legitimately runs slow.
+        """
+        env = os.environ.get(_ENV_TIMEOUT)
+        if env is not None and env.strip():
+            secs = float(env)
+        else:
+            secs = float(self._data.get("client", {}).get("timeout_seconds", 120))
+        if secs <= 0:
+            return None
+        return int(secs * 1000)
 
 
 def load_config(explicit_path: str | None = None) -> Config:

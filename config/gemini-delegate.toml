@@ -38,3 +38,10 @@ cache_dir = "~/.cache/gemini-delegate"
 # Image-generation endpoint: auto = try Interactions (Beta), fall back to
 # generateContent on failure. Override per call with --endpoint.
 endpoint = "auto"   # auto | interactions | generate_content
+
+[client]
+# Client-side request timeout. Without one a stalled call (especially a heavy
+# grounded `search`) hangs forever. Generous default so legitimately slow
+# grounded searches still complete. Override per run with $GEMINI_DELEGATE_TIMEOUT
+# (also seconds); set to 0 to disable the timeout entirely.
+timeout_seconds = 120

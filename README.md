@@ -189,6 +189,11 @@ gemini-delegate search --prompt "Sega Super Prologue 21 SKC-3000 service manual 
 
 `text` holds the grounded answer; `json` holds `{ sources: [{uri, title, domain}], queries: [...] }` so you can go straight to the source links. A `warnings` entry appears if the model answered without actually searching.
 
+> Grounding can run slow. Every call uses a finite client-side timeout (default
+> **120s**, set `[client].timeout_seconds` or `GEMINI_DELEGATE_TIMEOUT=<seconds>`;
+> `0` disables) so a stalled request fails with `error.type: "timeout"` rather
+> than hanging forever — raise it if a legitimately heavy search needs longer.
+
 ## The output envelope
 
 Every invocation prints **exactly one JSON object** to stdout and sets its exit

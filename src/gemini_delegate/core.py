@@ -15,7 +15,7 @@ from google import genai
 from google.genai import types
 
 from . import media
-from .config import Config
+from .config import Config, load_config
 from .session import Session
 
 _JSON_MIME = "application/json"
@@ -82,8 +82,14 @@ def resolve_api_key() -> str | None:
     return None
 
 
-def make_client() -> genai.Client:
-    """One client; the key is resolved from env or a user key file (never logged)."""
+def make_client(cfg: Config | None = None) -> genai.Client:
+    """One client; the key is resolved from env or a user key file (never logged).
+
+    A finite request timeout (config ``[client].timeout_seconds`` / env
+    ``GEMINI_DELEGATE_TIMEOUT``, default 120s) is always set so a stalled call
+    — especially a heavy grounded ``search`` — fails cleanly instead of hanging
+    forever (google-genai's default is no timeout).
+    """
     key = resolve_api_key()
     if not key:
         raise CoreError(
@@ -91,7 +97,11 @@ def make_client() -> genai.Client:
             "GEMINI_API_KEY not found in the environment, $GEMINI_DELEGATE_ENV, "
             "or ~/.config/gemini-delegate/.env",
         )
-    return genai.Client(api_key=key)
+    cfg = cfg if cfg is not None else load_config()
+    return genai.Client(
+        api_key=key,
+        http_options=types.HttpOptions(timeout=cfg.request_timeout_ms),
+    )
 
 
 # --- public operations ----------------------------------------------------------

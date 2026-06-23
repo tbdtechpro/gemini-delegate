@@ -15,6 +15,7 @@ from gemini_delegate.config import Config, ConfigError, load_config
 def _clean_env(monkeypatch):
     """Strip any gemini-delegate env vars so tests see a known baseline."""
     monkeypatch.delenv("GEMINI_DELEGATE_CONFIG", raising=False)
+    monkeypatch.delenv("GEMINI_DELEGATE_TIMEOUT", raising=False)
     for key in list(__import__("os").environ):
         if key.startswith("GEMINI_DELEGATE_MODEL_"):
             monkeypatch.delenv(key, raising=False)
@@ -135,3 +136,29 @@ def test_search_role_and_default():
     assert cfg.resolve_model("search") == cfg.models["search"]
     assert cfg.models["search"]  # non-empty
     assert cfg.default_role("search") == "search"
+
+
+# --- client request timeout -----------------------------------------------------
+
+
+def test_request_timeout_defaults_to_120s_in_ms():
+    # google-genai's HttpOptions.timeout is in milliseconds; default 120s.
+    assert load_config().request_timeout_ms == 120_000
+
+
+def test_request_timeout_override_from_config(tmp_path):
+    p = tmp_path / "c.toml"
+    p.write_text("[client]\ntimeout_seconds = 30\n")
+    assert load_config(explicit_path=str(p)).request_timeout_ms == 30_000
+
+
+def test_request_timeout_env_override_in_seconds(monkeypatch):
+    monkeypatch.setenv("GEMINI_DELEGATE_TIMEOUT", "45")
+    assert load_config().request_timeout_ms == 45_000
+
+
+def test_request_timeout_zero_disables(tmp_path):
+    # 0 (or negative) opts out of any client-side timeout.
+    p = tmp_path / "c.toml"
+    p.write_text("[client]\ntimeout_seconds = 0\n")
+    assert load_config(explicit_path=str(p)).request_timeout_ms is None

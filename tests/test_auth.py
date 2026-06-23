@@ -62,3 +62,24 @@ def test_make_client_raises_missing_key_when_nothing_found():
     with pytest.raises(CoreError) as exc:
         make_client()
     assert exc.value.type == "missing_key"
+
+
+def test_make_client_sets_request_timeout(monkeypatch, tmp_path):
+    # The client must carry a finite timeout so a stalled call can't hang forever.
+    from gemini_delegate.config import Config
+
+    monkeypatch.delenv("GEMINI_DELEGATE_TIMEOUT", raising=False)
+    f = tmp_path / "k.env"
+    f.write_text("GEMINI_API_KEY=abc\n")
+    monkeypatch.setenv("GEMINI_DELEGATE_ENV", str(f))
+    captured = {}
+
+    def fake_client(*, api_key, http_options=None):
+        captured["api_key"] = api_key
+        captured["http_options"] = http_options
+        return object()
+
+    monkeypatch.setattr("gemini_delegate.core.genai.Client", fake_client)
+    make_client(cfg=Config({}))  # empty config -> packaged default (120s)
+    assert captured["api_key"] == "abc"
+    assert captured["http_options"].timeout == 120_000

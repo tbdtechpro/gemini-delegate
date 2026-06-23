@@ -70,6 +70,15 @@ non-English / very-recent searches Claude Code's native search misses. Kept
 simple per the user: no human-confirm gate, no `--schema`/`--session` in v1
 (grounding + response_schema also conflict at the API). Billed per query.
 
+**Amendment (2026-06-23) — client request timeout.** `make_client` now always
+sets `http_options=HttpOptions(timeout=cfg.request_timeout_ms)`. google-genai
+2.9.0 defaults to **no** timeout, so a stalled call — especially a heavy grounded
+`search` — hung indefinitely (a live session got wedged). Config:
+`[client].timeout_seconds` (default **120s**), env `GEMINI_DELEGATE_TIMEOUT`
+(seconds; `0` disables). Timeout exceptions map to envelope
+`error.type = "timeout"` (`cli._is_timeout`), so the subagent gets a clean
+non-zero exit instead of a hang. (`config.request_timeout_ms` is the ms accessor.)
+
 ---
 
 ## 1. What we're building

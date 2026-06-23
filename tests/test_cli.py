@@ -224,3 +224,15 @@ def test_search_command(fake_gemini):
 def test_search_requires_prompt(fake_gemini):
     res = CliRunner().invoke(cli, ["search"])
     assert res.exit_code == 2
+
+
+def test_timeout_exception_maps_to_timeout_error_type(fake_gemini):
+    # A stalled call now surfaces as a clean envelope with error.type="timeout",
+    # exit 1 — never a hang, never a bare traceback.
+    import httpx
+    fake_gemini.models.generate_content.side_effect = httpx.ReadTimeout("read timed out")
+    res = CliRunner().invoke(cli, ["ask", "--prompt", "q"])
+    assert res.exit_code == 1
+    env = json.loads(res.output)
+    assert env["ok"] is False
+    assert env["error"]["type"] == "timeout"
